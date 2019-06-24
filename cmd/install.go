@@ -34,7 +34,7 @@ var installCmd = &cobra.Command{
 	Short: "Install Kubeflow",
 	Long:  `This command will setup Kubeflow on the kubernetes cluster`,
 	Args:  cobra.ExactArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {},
+	Run:   func(cmd *cobra.Command, args []string) {},
 }
 
 var kubeFlowCmd = &cobra.Command{
@@ -54,16 +54,6 @@ func init() {
 	rootCmd.AddCommand(installCmd)
 	installCmd.AddCommand(kubeFlowCmd)
 	kubeFlowCmd.Flags().BoolVarP(&k8s, "k8s", "", false, "Deploy Kubeflow on an existing Kubernetes cluster")
-
-	// Here you will define your flags and configuration settings.
-
-	// Cobra supports Persistent Flags which will work for this command
-	// and all subcommands, e.g.:
-	// installCmd.PersistentFlags().String("foo", "", "A help for foo")
-
-	// Cobra supports local flags which will only run when this command
-	// is called directly, e.g.:
-	// installCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
 }
 
 func kubeFlowInstall(kubeConfig string) {
@@ -76,22 +66,11 @@ func kubeFlowInstall(kubeConfig string) {
 	var kfDir string
 	fmt.Scanln(&kfDir)
 	fmt.Printf("Kubeflow install path: %s", kfDir)
-	//fmt.Println("Kubeflow directory exists on the system. Proceeding with the installation.")
 	err = os.Setenv("KFAPP", kfDir)
 
 	if err != nil {
 		log.Fatal("Unable to set env var KFAPP.")
 	}
-
-	//fmt.Println("Creating KFAPP directory if it doesn't exist")
-	//if _, err := os.Stat(kfDir); os.IsNotExist(err) {
-	//	os.Mkdir(kfDir, 0755)
-	//}
-	//if err != nil {
-	//	fmt.Errorf("Cannot create the directory: %s", kfDir)
-	//}
-	//fmt.Println("kfctl","init","${KFAPP}")
-	//fmt.Println("env get", os.Getenv("KFAPP"))
 
 	_, err = exec.Command("kfctl", "init", os.ExpandEnv("$KFAPP")).Output()
 
