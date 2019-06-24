@@ -46,8 +46,6 @@ var kubeFlowCmd = &cobra.Command{
 	Short: "Install Kubeflow",
 	Long:  `This command will setup Kubeflow on the kubernetes cluster`,
 	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println("Inside kubeflow command")
-		fmt.Println("install called")
 		checkKfctl()
 		kubeConfig := getKubeConfig()
 		checkKubectl(kubeConfig)
@@ -121,25 +119,24 @@ func kubeFlowInstall(kubeConfig string) {
 	var kfDir string
 	fmt.Scanln(&kfDir)
 	fmt.Printf("Kubeflow install path: %s", kfDir)
-	fmt.Println("Kubeflow directory exists on the system. Proceeding with the installation.")
+	//fmt.Println("Kubeflow directory exists on the system. Proceeding with the installation.")
 	err = os.Setenv("KFAPP", kfDir)
 
 	if err != nil {
 		log.Fatal("Unable to set env var KFAPP.")
 	}
 
-	fmt.Println("Creating KFAPP directory if it doesn't exist")
-	if _, err := os.Stat(kfDir); os.IsNotExist(err) {
-		os.Mkdir(kfDir, 0755)
-	}
-	if err != nil {
-		fmt.Errorf("Cannot create the directory: %s", kfDir)
-	}
-	fmt.Println("kfctl","init","${KFAPP}")
-	fmt.Println("env get", os.Getenv("KFAPP"))
+	//fmt.Println("Creating KFAPP directory if it doesn't exist")
+	//if _, err := os.Stat(kfDir); os.IsNotExist(err) {
+	//	os.Mkdir(kfDir, 0755)
+	//}
+	//if err != nil {
+	//	fmt.Errorf("Cannot create the directory: %s", kfDir)
+	//}
+	//fmt.Println("kfctl","init","${KFAPP}")
+	//fmt.Println("env get", os.Getenv("KFAPP"))
 
-	initCmd := exec.Command("kfctl","init","${KFAPP}")
-	initCmd.Env = os.Environ()
+	_, err = exec.Command("kfctl", "init", os.ExpandEnv("$KFAPP")).Output()
 
 	if err != nil {
 		log.Fatal("Cannot initialise with kfctl. Exiting.")
@@ -186,9 +183,23 @@ func kubeFlowInstall(kubeConfig string) {
 	}
 
 	fmt.Println("Checking if all the resources are deployed in the namespace kubeflow")
-	_, err = exec.Command("kubectl", "-n", "kubeflow", "get", "all").Output()
+	verifyKubeflow := exec.Command("kubectl", "-n", "kubeflow", "get", "all")
+	verifyKubeflow.Dir = kfDir
+	stdout, err = verifyKubeflow.StdoutPipe()
 	if err != nil {
-		log.Fatal("Kubeflow is not deployed successfully.")
+		log.Fatal(err)
+	}
+	scanner = bufio.NewScanner(stdout)
+	go func() {
+		for scanner.Scan() {
+			fmt.Println(scanner.Text())
+		}
+	}()
+	if err := verifyKubeflow.Start(); err != nil {
+		log.Fatal(err)
+	}
+	if err := verifyKubeflow.Wait(); err != nil {
+		log.Fatal(err)
 	}
 	fmt.Println("Successfully deployed Kubeflow. Have a pleasant time creating ML workflows.")
 }
