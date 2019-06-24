@@ -5,11 +5,13 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"github.com/logrusorgru/aurora"
+
 )
 
 func GetKubeConfig() string {
 	// Get kubeconfig
-	fmt.Println("Please enter the path to your kubeconfig:")
+	fmt.Println(aurora.Cyan("Please enter the path to your kubeconfig:"))
 	var kubeConfig string
 	fmt.Scanln(&kubeConfig)
 	fmt.Printf("path: %s\n", kubeConfig)

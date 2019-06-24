@@ -24,6 +24,8 @@ import (
 
 	"github.com/kubernauts/tk8ml/pkg/common"
 	"github.com/spf13/cobra"
+	"github.com/logrusorgru/aurora"
+
 )
 
 var kubeflow, k8s bool
@@ -60,22 +62,22 @@ func kubeFlowInstall(kubeConfig string) {
 	fmt.Println("Setting KUBECONFIG environment variable.")
 	err := os.Setenv("KUBECONFIG", kubeConfig)
 	if err != nil {
-		log.Fatal("Unable to set KUBECONFIG env var")
+		log.Fatal(aurora.Red("Unable to set KUBECONFIG env var"))
 	}
-	fmt.Println("Please enter the directory where you want to setup Kubeflow.")
+	fmt.Println(aurora.Cyan("Please enter the directory where you want to setup Kubeflow."))
 	var kfDir string
 	fmt.Scanln(&kfDir)
-	fmt.Printf("Kubeflow install path: %s", kfDir)
+	fmt.Printf("Kubeflow install path: %s\n", kfDir)
 	err = os.Setenv("KFAPP", kfDir)
 
 	if err != nil {
-		log.Fatal("Unable to set env var KFAPP.")
+		log.Fatal(aurora.Red("Unable to set env var KFAPP."))
 	}
 
 	_, err = exec.Command("kfctl", "init", os.ExpandEnv("$KFAPP")).Output()
 
 	if err != nil {
-		log.Fatal("Cannot initialise with kfctl. Exiting.")
+		log.Fatal(aurora.Red("Cannot initialise with kfctl. Exiting."))
 	}
 
 	fmt.Println("Starting kfctl generate")
@@ -83,7 +85,7 @@ func kubeFlowInstall(kubeConfig string) {
 	kfGenerateCmd.Dir = kfDir
 	stdout, err := kfGenerateCmd.StdoutPipe()
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal(aurora.Red(err))
 	}
 	scanner := bufio.NewScanner(stdout)
 	go func() {
@@ -92,10 +94,10 @@ func kubeFlowInstall(kubeConfig string) {
 		}
 	}()
 	if err := kfGenerateCmd.Start(); err != nil {
-		log.Fatal(err)
+		log.Fatal(aurora.Red(err))
 	}
 	if err := kfGenerateCmd.Wait(); err != nil {
-		log.Fatal(err)
+		log.Fatal(aurora.Red(err))
 	}
 
 	fmt.Println("Starting kfctl apply")
@@ -103,7 +105,7 @@ func kubeFlowInstall(kubeConfig string) {
 	kfApplyCmd.Dir = kfDir
 	stdout, err = kfApplyCmd.StdoutPipe()
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal(aurora.Red(err))
 	}
 	scanner = bufio.NewScanner(stdout)
 	go func() {
@@ -112,10 +114,10 @@ func kubeFlowInstall(kubeConfig string) {
 		}
 	}()
 	if err := kfApplyCmd.Start(); err != nil {
-		log.Fatal(err)
+		log.Fatal(aurora.Red(err))
 	}
 	if err := kfApplyCmd.Wait(); err != nil {
-		log.Fatal(err)
+		log.Fatal(aurora.Red(err))
 	}
 
 	fmt.Println("Checking if all the resources are deployed in the namespace kubeflow")
@@ -123,7 +125,7 @@ func kubeFlowInstall(kubeConfig string) {
 	verifyKubeflow.Dir = kfDir
 	stdout, err = verifyKubeflow.StdoutPipe()
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal(aurora.Red(err))
 	}
 	scanner = bufio.NewScanner(stdout)
 	go func() {
@@ -132,10 +134,10 @@ func kubeFlowInstall(kubeConfig string) {
 		}
 	}()
 	if err := verifyKubeflow.Start(); err != nil {
-		log.Fatal(err)
+		log.Fatal(aurora.Red(err))
 	}
 	if err := verifyKubeflow.Wait(); err != nil {
-		log.Fatal(err)
+		log.Fatal(aurora.Red(err))
 	}
-	fmt.Println("Successfully deployed Kubeflow. Have a pleasant time creating ML workflows.")
+	fmt.Println(aurora.Green("Successfully deployed Kubeflow. Have a pleasant time creating ML workflows."))
 }

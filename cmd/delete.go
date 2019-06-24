@@ -18,6 +18,7 @@ package cmd
 import (
 	"bufio"
 	"fmt"
+	"github.com/logrusorgru/aurora"
 	"log"
 	"os"
 	"os/exec"
@@ -78,26 +79,25 @@ func init() {
 }
 
 func kubeFlowDelete(kubeConfig string, deleteFlag string) {
-	fmt.Println("Please enter the directory where you had setup Kubeflow.")
+	fmt.Println(aurora.Cyan("Please enter the directory where you had setup Kubeflow."))
 	var kfDir string
 	fmt.Scanln(&kfDir)
-	fmt.Printf("Kubeflow install path: %s", kfDir)
+	fmt.Printf("Kubeflow install path: %s\n", kfDir)
 	//fmt.Println("Kubeflow directory exists on the system. Proceeding with the installation.")
 	err := os.Setenv("KFAPP", kfDir)
 
 	if err != nil {
-		log.Fatal("Unable to set env var KFAPP.")
+		log.Fatal(aurora.Red("Unable to set env var KFAPP."))
 	}
 
-	fmt.Println("Deleting kubeflow installation")
-	fmt.Println("delete flag", deleteFlag)
+	fmt.Println(aurora.Red("Deleting kubeflow installation"))
 	if deleteFlag == "all" {
 		fmt.Println("Deleting everything and preserving storage containing metadata from ML pipelines")
 		kfDeleteCmd := exec.Command("kfctl", "delete", "all")
 		kfDeleteCmd.Dir = kfDir
 		stdout, err := kfDeleteCmd.StdoutPipe()
 		if err != nil {
-			log.Fatal(err)
+			log.Fatal(aurora.Red(err))
 		}
 		scanner := bufio.NewScanner(stdout)
 		go func() {
@@ -106,10 +106,10 @@ func kubeFlowDelete(kubeConfig string, deleteFlag string) {
 			}
 		}()
 		if err := kfDeleteCmd.Start(); err != nil {
-			log.Fatal(err)
+			log.Fatal(aurora.Red(err))
 		}
 		if err := kfDeleteCmd.Wait(); err != nil {
-			log.Fatal(err)
+			log.Fatal(aurora.Red(err))
 		}
 	}
 
@@ -119,7 +119,7 @@ func kubeFlowDelete(kubeConfig string, deleteFlag string) {
 		kfDeleteCmd.Dir = kfDir
 		stdout, err := kfDeleteCmd.StdoutPipe()
 		if err != nil {
-			log.Fatal(err)
+			log.Fatal(aurora.Red(err))
 		}
 		scanner := bufio.NewScanner(stdout)
 		go func() {
@@ -128,10 +128,11 @@ func kubeFlowDelete(kubeConfig string, deleteFlag string) {
 			}
 		}()
 		if err := kfDeleteCmd.Start(); err != nil {
-			log.Fatal(err)
+			log.Fatal(aurora.Red(err))
 		}
 		if err := kfDeleteCmd.Wait(); err != nil {
-			log.Fatal(err)
+			log.Fatal(aurora.Red(err))
 		}
+		fmt.Println(aurora.Green("Successfully deleted Kubeflow installation."))
 	}
 }
