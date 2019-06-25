@@ -2,11 +2,18 @@ package common
 
 import (
 	"fmt"
+	"github.com/logrusorgru/aurora"
 	"log"
 	"os"
 	"os/exec"
-	"github.com/logrusorgru/aurora"
+)
 
+var (
+	Name string
+	// GITCOMMIT will hold the commit SHA to be used in the version command.
+	GITCOMMIT = "0"
+	// VERSION will hold the version number to be used in the version command.
+	VERSION = "dev"
 )
 
 func GetKubeConfig() string {

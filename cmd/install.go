@@ -23,9 +23,8 @@ import (
 	"os/exec"
 
 	"github.com/kubernauts/tk8ml/pkg/common"
-	"github.com/spf13/cobra"
 	"github.com/logrusorgru/aurora"
-
+	"github.com/spf13/cobra"
 )
 
 var kubeflow, k8s bool
