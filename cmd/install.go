@@ -17,17 +17,19 @@ package cmd
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"log"
 	"os"
 	"os/exec"
 
+	"github.com/google/go-github/github"
 	"github.com/kubernauts/tk8ml/pkg/common"
 	"github.com/logrusorgru/aurora"
 	"github.com/spf13/cobra"
 )
 
-var kubeflow, k8s bool
+var kubeflow, k8s, minikube bool
 
 // installCmd represents the install command
 var installCmd = &cobra.Command{
@@ -43,11 +45,24 @@ var kubeFlowCmd = &cobra.Command{
 	Short: "Install Kubeflow",
 	Long:  `This command will setup Kubeflow on the kubernetes cluster`,
 	Run: func(cmd *cobra.Command, args []string) {
-		common.CheckKfctl()
-		kubeConfig := common.GetKubeConfig()
-		common.CheckKubectl(kubeConfig)
-		kubeFlowInstall(kubeConfig)
-		os.Exit(0)
+		if k8s {
+			common.CheckKfctl()
+			kubeConfig := common.GetKubeConfig()
+			common.CheckKubectl(kubeConfig)
+			kubeFlowInstall(kubeConfig)
+			os.Exit(0)
+		}
+
+		if minikube {
+			kubeConfig := common.GetKubeConfig()
+			common.CheckKubectl(kubeConfig)
+			kubeFlowInstallMinikube()
+		}
+
+		if len(args) == 0 {
+			cmd.Help()
+			os.Exit(0)
+		}
 	},
 }
 
@@ -55,6 +70,7 @@ func init() {
 	rootCmd.AddCommand(installCmd)
 	installCmd.AddCommand(kubeFlowCmd)
 	kubeFlowCmd.Flags().BoolVarP(&k8s, "k8s", "", false, "Deploy Kubeflow on an existing Kubernetes cluster")
+	kubeFlowCmd.Flags().BoolVarP(&minikube, "minikube", "", false, "Deploy Kubeflow on existing minikube installation")
 }
 
 func kubeFlowInstall(kubeConfig string) {
@@ -139,4 +155,116 @@ func kubeFlowInstall(kubeConfig string) {
 		log.Fatal(aurora.Red(err))
 	}
 	fmt.Println(aurora.Green("Successfully deployed Kubeflow. Have a pleasant time creating ML workflows."))
+}
+
+func kubeFlowInstallMinikube() {
+	fmt.Println(aurora.Cyan("Please enter the directory where you want to download the Kubeflow setup script."))
+	var kfScriptDir string
+	_, err := fmt.Scanln(&kfScriptDir)
+	if err != nil {
+		log.Fatal(aurora.Red("Unable to read the input"), aurora.Red(err))
+	}
+	err = os.Setenv("KUBEFLOW_SRC", kfScriptDir)
+	if err != nil {
+		log.Fatal(aurora.Red("Unable to set environment variable KUBEFLOW_SRC"), aurora.Red(err))
+	}
+	fmt.Println("Fetching the latest Kubeflow tag from releases")
+	client := github.NewClient(nil)
+	releases, _, err := client.Repositories.GetLatestRelease(context.Background(), "kubeflow", "kubeflow")
+	if err != nil {
+		fmt.Println("release error", err)
+	}
+
+	fetchKubeflowTag := *releases.TagName
+	fmt.Println(fetchKubeflowTag)
+	err = os.Setenv("KUBEFLOW_TAG", fetchKubeflowTag)
+	if err != nil {
+		log.Fatal(aurora.Red("Unable to set environment variable KUBEFLOW_TAG"), aurora.Red(err))
+	}
+	downloadUrl := "https://raw.githubusercontent.com/kubeflow/kubeflow/" + os.ExpandEnv("$KUBEFLOW_TAG") + "/scripts/download.sh"
+	_, err = exec.Command("wget", "-P", kfScriptDir, downloadUrl).Output()
+	fmt.Println("/bin/sh", "download.sh")
+	if err != nil {
+		log.Fatal(aurora.Red("Unable to download the kubeflow download script"), os.Stderr)
+	}
+	kfScriptDownloadCmd := exec.Command("/bin/sh", "download.sh")
+
+	kfScriptDownloadCmd.Dir = kfScriptDir
+
+	_, err = kfScriptDownloadCmd.Output()
+	if err != nil {
+		fmt.Println("test")
+	}
+
+	fmt.Println(aurora.Cyan("Please enter the directory where you want to setup Kubeflow."))
+	var kfDir string
+	fmt.Scanln(&kfDir)
+	fmt.Printf("Kubeflow install path: %s\n", kfDir)
+	err = os.Setenv("KFAPP", kfDir)
+
+	if err != nil {
+		log.Fatal(aurora.Red("Unable to set env var KFAPP."))
+	}
+
+	os.Setenv("$KUBEFLOW_REPO", "$KUBEFLOW_SRC")
+	kfInitCmd := exec.Command("kfctl", "init", os.ExpandEnv("$KFAPP"), "--platform", "minikube")
+
+	stdout, err := kfInitCmd.StdoutPipe()
+	if err != nil {
+		log.Fatal(aurora.Red(err))
+	}
+	scanner := bufio.NewScanner(stdout)
+	go func() {
+		for scanner.Scan() {
+			fmt.Println(scanner.Text())
+		}
+	}()
+	if err := kfInitCmd.Start(); err != nil {
+		log.Fatal(aurora.Red(err))
+	}
+	if err := kfInitCmd.Wait(); err != nil {
+		log.Fatal(aurora.Red(err))
+	}
+
+	fmt.Println("Starting kfctl generate")
+	kfGenerateCmd := exec.Command("kfctl", "generate", "all", "-V")
+	kfGenerateCmd.Dir = kfDir
+	stdout, err = kfGenerateCmd.StdoutPipe()
+	if err != nil {
+		log.Fatal(aurora.Red(err))
+	}
+	scanner = bufio.NewScanner(stdout)
+	go func() {
+		for scanner.Scan() {
+			fmt.Println(scanner.Text())
+		}
+	}()
+	if err := kfGenerateCmd.Start(); err != nil {
+		log.Fatal(aurora.Red(err))
+	}
+	if err := kfGenerateCmd.Wait(); err != nil {
+		log.Fatal(aurora.Red(err))
+	}
+
+	fmt.Println("Starting kfctl apply")
+	kfApplyCmd := exec.Command("kfctl", "apply", "all", "-V")
+	kfApplyCmd.Dir = kfDir
+	stdout, err = kfApplyCmd.StdoutPipe()
+	if err != nil {
+		log.Fatal(aurora.Red(err))
+	}
+	scanner = bufio.NewScanner(stdout)
+	go func() {
+		for scanner.Scan() {
+			fmt.Println(scanner.Text())
+		}
+	}()
+	if err := kfApplyCmd.Start(); err != nil {
+		log.Fatal(aurora.Red(err))
+	}
+	if err := kfApplyCmd.Wait(); err != nil {
+		log.Fatal(aurora.Red(err))
+	}
+	fmt.Println(aurora.Green("Successfully deployed Kubeflow. Have a pleasant time creating ML workflows."))
+
 }
