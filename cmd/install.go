@@ -27,7 +27,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var kubeflow, k8s bool
+var kubeflow, k8s, chainerOperator bool
 
 // installCmd represents the install command
 var installCmd = &cobra.Command{
@@ -51,10 +51,32 @@ var kubeFlowCmd = &cobra.Command{
 	},
 }
 
+var kubeFlowComponentCmd = &cobra.Command{
+	Use:   "kubeflow-component",
+	Short: "Installs Kubeflow components",
+	Long:  `This command will install different kubeflow components`,
+	Run: func(cmd *cobra.Command, args []string) {
+		if chainerOperator {
+			common.CheckKfctl()
+			kubeConfig := common.GetKubeConfig()
+			common.CheckKubectl(kubeConfig)
+			installChainerOperator()
+			os.Exit(0)
+		}
+
+		if len(args) == 0 {
+			cmd.Help()
+			os.Exit(0)
+		}
+	},
+}
+
 func init() {
 	rootCmd.AddCommand(installCmd)
 	installCmd.AddCommand(kubeFlowCmd)
+	installCmd.AddCommand(kubeFlowComponentCmd)
 	kubeFlowCmd.Flags().BoolVarP(&k8s, "k8s", "", false, "Deploy Kubeflow on an existing Kubernetes cluster")
+	kubeFlowComponentCmd.Flags().BoolVarP(&chainerOperator, "chainer-operator", "", false, "Deploy Chainer Operator")
 }
 
 func kubeFlowInstall(kubeConfig string) {
@@ -139,4 +161,72 @@ func kubeFlowInstall(kubeConfig string) {
 		log.Fatal(aurora.Red(err))
 	}
 	fmt.Println(aurora.Green("Successfully deployed Kubeflow. Have a pleasant time creating ML workflows."))
+}
+
+func installChainerOperator() {
+	fmt.Println(aurora.Cyan("Enter the KSONNET_APP directory path"))
+	var ksAppDir, ksEnvVar string
+	fmt.Scanln(&ksAppDir)
+	fmt.Println(aurora.Cyan("Enter the value for ENVIRONMENT variable. By default, it is set to \"default\"."))
+	fmt.Scanln(&ksEnvVar)
+	os.Setenv("ENVIRONMENT", ksEnvVar)
+	fmt.Println("Installing Chainer Operator package")
+	ksInstallPkg := exec.Command("ks", "pkg", "install", "kubeflow/chainer-job")
+	ksInstallPkg.Dir = ksAppDir
+	stdout, err := ksInstallPkg.StdoutPipe()
+	if err != nil {
+		log.Fatal(aurora.Red(err))
+	}
+	scanner := bufio.NewScanner(stdout)
+	go func() {
+		for scanner.Scan() {
+			fmt.Println(scanner.Text())
+		}
+	}()
+	if err := ksInstallPkg.Start(); err != nil {
+		log.Fatal(aurora.Red(err))
+	}
+	if err := ksInstallPkg.Wait(); err != nil {
+		log.Fatal(aurora.Red(err))
+	}
+	fmt.Println("Generating chainer-operator by ksonnet")
+	ksGen := exec.Command("ks", "generate", "chainer-operator", "chainer-operator")
+	ksGen.Dir = ksAppDir
+	stdout, err = ksGen.StdoutPipe()
+	if err != nil {
+		log.Fatal(aurora.Red(err))
+	}
+	scanner = bufio.NewScanner(stdout)
+	go func() {
+		for scanner.Scan() {
+			fmt.Println(scanner.Text())
+		}
+	}()
+	if err := ksGen.Start(); err != nil {
+		log.Fatal(aurora.Red(err))
+	}
+	if err := ksGen.Wait(); err != nil {
+		log.Fatal(aurora.Red(err))
+	}
+
+	fmt.Println("Applying chainer-operator config")
+	ksApply := exec.Command("ks", "apply", os.ExpandEnv("$ENVIRONMENT"), "-c", "chainer-operator")
+	ksApply.Dir = ksAppDir
+	stdout, err = ksApply.StdoutPipe()
+	if err != nil {
+		log.Fatal(aurora.Red(err))
+	}
+	scanner = bufio.NewScanner(stdout)
+	go func() {
+		for scanner.Scan() {
+			fmt.Println(scanner.Text())
+		}
+	}()
+	if err := ksApply.Start(); err != nil {
+		log.Fatal(aurora.Red(err))
+	}
+	if err := ksApply.Wait(); err != nil {
+		log.Fatal(aurora.Red(err))
+	}
+	fmt.Println(aurora.Green("Chainer Operator has been deployed successfully"))
 }
