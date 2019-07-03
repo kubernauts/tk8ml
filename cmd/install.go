@@ -27,7 +27,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var kubeflow, k8s, chainerOperator bool
+var kubeflow, k8s, chainerOperator, katib bool
 
 // installCmd represents the install command
 var installCmd = &cobra.Command{
@@ -62,6 +62,14 @@ var kubeFlowComponentCmd = &cobra.Command{
 			common.CheckKubectl(kubeConfig)
 			installChainerOperator()
 			os.Exit(0)
+		}
+
+		if katib {
+			kubeConfig := common.GetKubeConfig()
+			common.CheckKubectl(kubeConfig)
+			installKatib()
+			os.Exit(0)
+
 		}
 
 		if len(args) == 0 {
@@ -229,4 +237,258 @@ func installChainerOperator() {
 		log.Fatal(aurora.Red(err))
 	}
 	fmt.Println(aurora.Green("Chainer Operator has been deployed successfully"))
+}
+
+func installKatib() {
+	fmt.Println(aurora.Cyan("Enter the KSONNET_APP directory path"))
+	var ksAppDir string
+	fmt.Scanln(&ksAppDir)
+
+	fmt.Println("Setting KF_ENV env var to default")
+	os.Setenv("$KF_ENV", "default")
+	kfEnvVar := "default"
+	ksEnvSet := exec.Command("ks", "env", "set", os.ExpandEnv("$KF_ENV"), "--namespace=kubeflow")
+
+	ksEnvSet.Dir = ksAppDir
+	stdout, err := ksEnvSet.StdoutPipe()
+	if err != nil {
+		log.Fatal(aurora.Red(err))
+	}
+	scanner := bufio.NewScanner(stdout)
+	go func() {
+		for scanner.Scan() {
+			fmt.Println(scanner.Text())
+		}
+	}()
+	if err := ksEnvSet.Start(); err != nil {
+		log.Fatal(aurora.Red(err))
+	}
+	if err := ksEnvSet.Wait(); err != nil {
+		log.Fatal(aurora.Red(err))
+	}
+
+	fmt.Println("Adding kubeflow registry")
+	kubeflowUrl := "github.com/kubeflow/kubeflow/tree/master/kubeflow"
+	ksAddRegistry := exec.Command("ks", "registry", "add", "kubeflow", kubeflowUrl)
+	ksAddRegistry.Dir = ksAppDir
+	stdout, err = ksAddRegistry.StdoutPipe()
+	if err != nil {
+		log.Fatal(aurora.Red(err))
+	}
+	scanner = bufio.NewScanner(stdout)
+	go func() {
+		for scanner.Scan() {
+			fmt.Println(scanner.Text())
+		}
+	}()
+	if err := ksAddRegistry.Start(); err != nil {
+		log.Fatal(aurora.Red(err))
+	}
+	if err := ksAddRegistry.Wait(); err != nil {
+		log.Fatal(aurora.Red(err))
+	}
+
+	// Install TF Job Operator
+	installTfJob(ksAppDir, kfEnvVar)
+
+	// Install Pytorch
+	installPytorch(ksAppDir, kfEnvVar)
+
+	fmt.Println("Installing Katib")
+	pkgInstallKatib := exec.Command("ks", "pkg", "install", "kubeflow/katib")
+	pkgInstallKatib.Dir = ksAppDir
+	stdout, err = pkgInstallKatib.StdoutPipe()
+	if err != nil {
+		log.Fatal(aurora.Red(err))
+	}
+	scanner = bufio.NewScanner(stdout)
+	go func() {
+		for scanner.Scan() {
+			fmt.Println(scanner.Text())
+		}
+	}()
+	if err := pkgInstallKatib.Start(); err != nil {
+		log.Fatal(aurora.Red(err))
+	}
+	if err := pkgInstallKatib.Wait(); err != nil {
+		log.Fatal(aurora.Red(err))
+	}
+
+	generateKatib := exec.Command("ks", "generate", "katib", "katib")
+	generateKatib.Dir = ksAppDir
+	stdout, err = generateKatib.StdoutPipe()
+	if err != nil {
+		log.Fatal(aurora.Red(err))
+	}
+	scanner = bufio.NewScanner(stdout)
+	go func() {
+		for scanner.Scan() {
+			fmt.Println(scanner.Text())
+		}
+	}()
+	if err := generateKatib.Start(); err != nil {
+		log.Fatal(aurora.Red(err))
+	}
+	if err := generateKatib.Wait(); err != nil {
+		log.Fatal(aurora.Red(err))
+	}
+
+	applykatib := exec.Command("ks", "apply", os.ExpandEnv("$KF_ENV"), "-c", "katib")
+	generateKatib.Dir = ksAppDir
+	stdout, err = applykatib.StdoutPipe()
+	if err != nil {
+		log.Fatal(aurora.Red(err))
+	}
+	scanner = bufio.NewScanner(stdout)
+	go func() {
+		for scanner.Scan() {
+			fmt.Println(scanner.Text())
+		}
+	}()
+	if err := applykatib.Start(); err != nil {
+		log.Fatal(aurora.Red(err))
+	}
+	if err := applykatib.Wait(); err != nil {
+		log.Fatal(aurora.Red(err))
+	}
+}
+
+func installTfJob(ksAppDir string, kfEnvVar string) {
+	fmt.Println("Installing Tensorflow job operator")
+	tfTrainingInstall := exec.Command("ks", "pkg", "install", "kubeflow/tf-training")
+	tfTrainingInstall.Dir = ksAppDir
+	stdout, err := tfTrainingInstall.StdoutPipe()
+	if err != nil {
+		log.Fatal(aurora.Red(err))
+	}
+	scanner := bufio.NewScanner(stdout)
+	go func() {
+		for scanner.Scan() {
+			fmt.Println(scanner.Text())
+		}
+	}()
+	if err := tfTrainingInstall.Start(); err != nil {
+		log.Fatal(aurora.Red(err))
+	}
+	if err := tfTrainingInstall.Wait(); err != nil {
+		log.Fatal(aurora.Red(err))
+	}
+
+	kubeflowCommonInstall := exec.Command("ks", "pkg", "install", "kubeflow/common")
+	kubeflowCommonInstall.Dir = ksAppDir
+	stdout, err = kubeflowCommonInstall.StdoutPipe()
+	if err != nil {
+		log.Fatal(aurora.Red(err))
+	}
+	scanner = bufio.NewScanner(stdout)
+	go func() {
+		for scanner.Scan() {
+			fmt.Println(scanner.Text())
+		}
+	}()
+	if err := kubeflowCommonInstall.Start(); err != nil {
+		log.Fatal(aurora.Red(err))
+	}
+	if err := kubeflowCommonInstall.Wait(); err != nil {
+		log.Fatal(aurora.Red(err))
+	}
+
+	generateTfOperator := exec.Command("ks", "generate", "tf-job-operator", "tf-job-operator")
+	generateTfOperator.Dir = ksAppDir
+	stdout, err = generateTfOperator.StdoutPipe()
+	if err != nil {
+		log.Fatal(aurora.Red(err))
+	}
+	scanner = bufio.NewScanner(stdout)
+	go func() {
+		for scanner.Scan() {
+			fmt.Println(scanner.Text())
+		}
+	}()
+	if err := generateTfOperator.Start(); err != nil {
+		log.Fatal(aurora.Red(err))
+	}
+	if err := generateTfOperator.Wait(); err != nil {
+		log.Fatal(aurora.Red(err))
+	}
+	os.Setenv("$KF_ENV", kfEnvVar)
+	ksApplyTfJob := exec.Command("ks", "apply", os.ExpandEnv("$KF_ENV"), "-c", "tf-job-operator")
+	ksApplyTfJob.Dir = ksAppDir
+	stdout, err = ksApplyTfJob.StdoutPipe()
+	if err != nil {
+		log.Fatal(aurora.Red(err))
+	}
+	scanner = bufio.NewScanner(stdout)
+	go func() {
+		for scanner.Scan() {
+			fmt.Println(scanner.Text())
+		}
+	}()
+	if err := ksApplyTfJob.Start(); err != nil {
+		log.Fatal(aurora.Red(err))
+	}
+	if err := ksApplyTfJob.Wait(); err != nil {
+		log.Fatal(aurora.Red(err))
+	}
+
+}
+
+func installPytorch(ksAppDir string, kfEnvVar string) {
+	fmt.Println("Installing PyTorch Job operator")
+	pkgInstallPytorch := exec.Command("ks", "pkg", "install", "kubeflow/pytorch-job")
+	pkgInstallPytorch.Dir = ksAppDir
+	stdout, err := pkgInstallPytorch.StdoutPipe()
+	if err != nil {
+		log.Fatal(aurora.Red(err))
+	}
+	scanner := bufio.NewScanner(stdout)
+	go func() {
+		for scanner.Scan() {
+			fmt.Println(scanner.Text())
+		}
+	}()
+	if err := pkgInstallPytorch.Start(); err != nil {
+		log.Fatal(aurora.Red(err))
+	}
+	if err := pkgInstallPytorch.Wait(); err != nil {
+		log.Fatal(aurora.Red(err))
+	}
+
+	generatePytorch := exec.Command("ks", "generate", "pytorch-operator", "pytorch-operator")
+	generatePytorch.Dir = ksAppDir
+	stdout, err = generatePytorch.StdoutPipe()
+	if err != nil {
+		log.Fatal(aurora.Red(err))
+	}
+	scanner = bufio.NewScanner(stdout)
+	go func() {
+		for scanner.Scan() {
+			fmt.Println(scanner.Text())
+		}
+	}()
+	if err := generatePytorch.Start(); err != nil {
+		log.Fatal(aurora.Red(err))
+	}
+	if err := generatePytorch.Wait(); err != nil {
+		log.Fatal(aurora.Red(err))
+	}
+	os.Setenv("$KF_ENV", kfEnvVar)
+	applyPytorch := exec.Command("ks", "apply", os.ExpandEnv("$KF_ENV"), "-c", "pytorch-operator")
+	applyPytorch.Dir = ksAppDir
+	stdout, err = applyPytorch.StdoutPipe()
+	if err != nil {
+		log.Fatal(aurora.Red(err))
+	}
+	scanner = bufio.NewScanner(stdout)
+	go func() {
+		for scanner.Scan() {
+			fmt.Println(scanner.Text())
+		}
+	}()
+	if err := applyPytorch.Start(); err != nil {
+		log.Fatal(aurora.Red(err))
+	}
+	if err := applyPytorch.Wait(); err != nil {
+		log.Fatal(aurora.Red(err))
+	}
 }
