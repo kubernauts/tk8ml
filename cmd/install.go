@@ -85,6 +85,8 @@ func init() {
 	installCmd.AddCommand(kubeFlowComponentCmd)
 	kubeFlowCmd.Flags().BoolVarP(&k8s, "k8s", "", false, "Deploy Kubeflow on an existing Kubernetes cluster")
 	kubeFlowComponentCmd.Flags().BoolVarP(&chainerOperator, "chainer-operator", "", false, "Deploy Chainer Operator")
+	kubeFlowComponentCmd.Flags().BoolVarP(&katib, "katib", "", false, "Deploy Katib")
+
 }
 
 func kubeFlowInstall(kubeConfig string) {
