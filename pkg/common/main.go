@@ -58,7 +58,7 @@ func CheckKfctl() {
 
 }
 
-func CheckComponentExists(componentName string, ksAppDir string) {
+func CheckComponentExist(componentName string, ksAppDir string) {
 	var outb, errb bytes.Buffer
 	fmt.Printf("Checking if %s already exists.", componentName)
 	checkComponentExists := exec.Command("ks", "pkg", "list")
