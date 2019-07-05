@@ -171,7 +171,6 @@ func kubeFlowInstall(kubeConfig string) {
 }
 
 func installChainerOperator() {
-	var outb, errb bytes.Buffer
 	fmt.Println(Cyan("Enter the KSONNET_APP directory path"))
 	var ksAppDir, ksEnvVar string
 	fmt.Scanln(&ksAppDir)
@@ -297,8 +296,6 @@ func installKatib() {
 }
 
 func installTfJob(ksAppDir string, kfEnvVar string) {
-
-	var outb, errb bytes.Buffer
 	componentName := "tf-training"
 	common.CheckComponentExist(componentName, ksAppDir)
 
@@ -347,7 +344,6 @@ func installTfJob(ksAppDir string, kfEnvVar string) {
 }
 
 func installPytorch(ksAppDir string, kfEnvVar string) {
-	var outb, errb bytes.Buffer
 	componentName := "pytorch-job"
 	common.CheckComponentExist(componentName, ksAppDir)
 
