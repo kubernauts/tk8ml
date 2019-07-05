@@ -177,7 +177,7 @@ func installChainerOperator() {
 
 	componentName := "chainer-job"
 	common.CheckComponentExist(componentName, ksAppDir)
-	fmt.Println(Cyan("Enter the value for ENVIRONMENT variable. By default, it is set to \"default\"."))
+	fmt.Println(Cyan("\nEnter the value for ENVIRONMENT variable. By default, it is set to \"default\"."))
 	fmt.Scanln(&ksEnvVar)
 	os.Setenv("ENVIRONMENT", ksEnvVar)
 	fmt.Println("Installing Chainer Operator package")
