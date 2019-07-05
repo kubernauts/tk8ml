@@ -17,13 +17,14 @@ package cmd
 
 import (
 	"bufio"
+	"bytes"
 	"fmt"
 	"log"
 	"os"
 	"os/exec"
 
 	"github.com/kubernauts/tk8ml/pkg/common"
-	"github.com/logrusorgru/aurora"
+	. "github.com/logrusorgru/aurora"
 	"github.com/spf13/cobra"
 )
 
@@ -58,15 +59,11 @@ var kubeFlowComponentCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		if chainerOperator {
 			common.CheckKfctl()
-			kubeConfig := common.GetKubeConfig()
-			common.CheckKubectl(kubeConfig)
 			installChainerOperator()
 			os.Exit(0)
 		}
 
 		if katib {
-			kubeConfig := common.GetKubeConfig()
-			common.CheckKubectl(kubeConfig)
 			installKatib()
 			os.Exit(0)
 
@@ -93,22 +90,22 @@ func kubeFlowInstall(kubeConfig string) {
 	fmt.Println("Setting KUBECONFIG environment variable.")
 	err := os.Setenv("KUBECONFIG", kubeConfig)
 	if err != nil {
-		log.Fatal(aurora.Red("Unable to set KUBECONFIG env var"))
+		log.Fatal(Red("Unable to set KUBECONFIG env var"))
 	}
-	fmt.Println(aurora.Cyan("Please enter the directory where you want to setup Kubeflow."))
+	fmt.Println(Cyan("Please enter the directory where you want to setup Kubeflow."))
 	var kfDir string
 	fmt.Scanln(&kfDir)
 	fmt.Printf("Kubeflow install path: %s\n", kfDir)
 	err = os.Setenv("KFAPP", kfDir)
 
 	if err != nil {
-		log.Fatal(aurora.Red("Unable to set env var KFAPP."))
+		log.Fatal(Red("Unable to set env var KFAPP."))
 	}
 
 	_, err = exec.Command("kfctl", "init", os.ExpandEnv("$KFAPP")).Output()
 
 	if err != nil {
-		log.Fatal(aurora.Red("Cannot initialise with kfctl. Exiting."))
+		log.Fatal(Red("Cannot initialise with kfctl. Exiting."))
 	}
 
 	fmt.Println("Starting kfctl generate")
@@ -116,7 +113,7 @@ func kubeFlowInstall(kubeConfig string) {
 	kfGenerateCmd.Dir = kfDir
 	stdout, err := kfGenerateCmd.StdoutPipe()
 	if err != nil {
-		log.Fatal(aurora.Red(err))
+		log.Fatal(Red(err))
 	}
 	scanner := bufio.NewScanner(stdout)
 	go func() {
@@ -125,10 +122,10 @@ func kubeFlowInstall(kubeConfig string) {
 		}
 	}()
 	if err := kfGenerateCmd.Start(); err != nil {
-		log.Fatal(aurora.Red(err))
+		log.Fatal(Red(err))
 	}
 	if err := kfGenerateCmd.Wait(); err != nil {
-		log.Fatal(aurora.Red(err))
+		log.Fatal(Red(err))
 	}
 
 	fmt.Println("Starting kfctl apply")
@@ -136,7 +133,7 @@ func kubeFlowInstall(kubeConfig string) {
 	kfApplyCmd.Dir = kfDir
 	stdout, err = kfApplyCmd.StdoutPipe()
 	if err != nil {
-		log.Fatal(aurora.Red(err))
+		log.Fatal(Red(err))
 	}
 	scanner = bufio.NewScanner(stdout)
 	go func() {
@@ -145,10 +142,10 @@ func kubeFlowInstall(kubeConfig string) {
 		}
 	}()
 	if err := kfApplyCmd.Start(); err != nil {
-		log.Fatal(aurora.Red(err))
+		log.Fatal(Red(err))
 	}
 	if err := kfApplyCmd.Wait(); err != nil {
-		log.Fatal(aurora.Red(err))
+		log.Fatal(Red(err))
 	}
 
 	fmt.Println("Checking if all the resources are deployed in the namespace kubeflow")
@@ -156,7 +153,7 @@ func kubeFlowInstall(kubeConfig string) {
 	verifyKubeflow.Dir = kfDir
 	stdout, err = verifyKubeflow.StdoutPipe()
 	if err != nil {
-		log.Fatal(aurora.Red(err))
+		log.Fatal(Red(err))
 	}
 	scanner = bufio.NewScanner(stdout)
 	go func() {
@@ -165,27 +162,43 @@ func kubeFlowInstall(kubeConfig string) {
 		}
 	}()
 	if err := verifyKubeflow.Start(); err != nil {
-		log.Fatal(aurora.Red(err))
+		log.Fatal(Red(err))
 	}
 	if err := verifyKubeflow.Wait(); err != nil {
-		log.Fatal(aurora.Red(err))
+		log.Fatal(Red(err))
 	}
-	fmt.Println(aurora.Green("Successfully deployed Kubeflow. Have a pleasant time creating ML workflows."))
+	fmt.Println(Green("Successfully deployed Kubeflow. Have a pleasant time creating ML workflows."))
 }
 
 func installChainerOperator() {
-	fmt.Println(aurora.Cyan("Enter the KSONNET_APP directory path"))
+	var outb, errb bytes.Buffer
+	fmt.Println(Cyan("Enter the KSONNET_APP directory path"))
 	var ksAppDir, ksEnvVar string
 	fmt.Scanln(&ksAppDir)
-	fmt.Println(aurora.Cyan("Enter the value for ENVIRONMENT variable. By default, it is set to \"default\"."))
+
+	componentName := "chainer-job"
+	common.CheckComponentExist(componentName, ksAppDir)
+	fmt.Println(Cyan("Enter the value for ENVIRONMENT variable. By default, it is set to \"default\"."))
 	fmt.Scanln(&ksEnvVar)
 	os.Setenv("ENVIRONMENT", ksEnvVar)
 	fmt.Println("Installing Chainer Operator package")
-	ksInstallPkg := exec.Command("ks", "pkg", "install", "kubeflow/chainer-job")
-	ksInstallPkg.Dir = ksAppDir
-	stdout, err := ksInstallPkg.StdoutPipe()
+
+	pkgName := "kubeflow/chainer-job"
+
+	// install pkg
+	common.KsPkgInstall(pkgName, ksAppDir)
+
+	componentGenerateName := "chainer-operator"
+
+	// generate component with ksonnet
+	common.ComponentGenerate(componentGenerateName, ksAppDir)
+
+	fmt.Println("Applying chainer-operator config")
+	ksApply := exec.Command("ks", "apply", os.ExpandEnv("$ENVIRONMENT"), "-c", "chainer-operator")
+	ksApply.Dir = ksAppDir
+	stdout, err := ksApply.StdoutPipe()
 	if err != nil {
-		log.Fatal(aurora.Red(err))
+		log.Fatal(Red(err))
 	}
 	scanner := bufio.NewScanner(stdout)
 	go func() {
@@ -193,58 +206,22 @@ func installChainerOperator() {
 			fmt.Println(scanner.Text())
 		}
 	}()
-	if err := ksInstallPkg.Start(); err != nil {
-		log.Fatal(aurora.Red(err))
-	}
-	if err := ksInstallPkg.Wait(); err != nil {
-		log.Fatal(aurora.Red(err))
-	}
-	fmt.Println("Generating chainer-operator by ksonnet")
-	ksGen := exec.Command("ks", "generate", "chainer-operator", "chainer-operator")
-	ksGen.Dir = ksAppDir
-	stdout, err = ksGen.StdoutPipe()
-	if err != nil {
-		log.Fatal(aurora.Red(err))
-	}
-	scanner = bufio.NewScanner(stdout)
-	go func() {
-		for scanner.Scan() {
-			fmt.Println(scanner.Text())
-		}
-	}()
-	if err := ksGen.Start(); err != nil {
-		log.Fatal(aurora.Red(err))
-	}
-	if err := ksGen.Wait(); err != nil {
-		log.Fatal(aurora.Red(err))
-	}
-
-	fmt.Println("Applying chainer-operator config")
-	ksApply := exec.Command("ks", "apply", os.ExpandEnv("$ENVIRONMENT"), "-c", "chainer-operator")
-	ksApply.Dir = ksAppDir
-	stdout, err = ksApply.StdoutPipe()
-	if err != nil {
-		log.Fatal(aurora.Red(err))
-	}
-	scanner = bufio.NewScanner(stdout)
-	go func() {
-		for scanner.Scan() {
-			fmt.Println(scanner.Text())
-		}
-	}()
 	if err := ksApply.Start(); err != nil {
-		log.Fatal(aurora.Red(err))
+		log.Fatal(Red(err))
 	}
 	if err := ksApply.Wait(); err != nil {
-		log.Fatal(aurora.Red(err))
+		log.Fatal(Red(err))
 	}
-	fmt.Println(aurora.Green("Chainer Operator has been deployed successfully"))
+	fmt.Println(Green("Chainer Operator has been deployed successfully"))
 }
 
 func installKatib() {
-	fmt.Println(aurora.Cyan("Enter the KSONNET_APP directory path"))
+	var outb, errb bytes.Buffer
+	fmt.Println(Cyan("Enter the KSONNET_APP directory path"))
 	var ksAppDir string
 	fmt.Scanln(&ksAppDir)
+	componentName := "katib"
+	common.CheckComponentExist(componentName, ksAppDir)
 
 	fmt.Println("Setting KF_ENV env var to default")
 	os.Setenv("$KF_ENV", "default")
@@ -254,7 +231,7 @@ func installKatib() {
 	ksEnvSet.Dir = ksAppDir
 	stdout, err := ksEnvSet.StdoutPipe()
 	if err != nil {
-		log.Fatal(aurora.Red(err))
+		log.Fatal(Red(err))
 	}
 	scanner := bufio.NewScanner(stdout)
 	go func() {
@@ -263,31 +240,21 @@ func installKatib() {
 		}
 	}()
 	if err := ksEnvSet.Start(); err != nil {
-		log.Fatal(aurora.Red(err))
+		log.Fatal(Red(err))
 	}
 	if err := ksEnvSet.Wait(); err != nil {
-		log.Fatal(aurora.Red(err))
+		log.Fatal(Red(err))
 	}
 
 	fmt.Println("Adding kubeflow registry")
 	kubeflowUrl := "github.com/kubeflow/kubeflow/tree/master/kubeflow"
 	ksAddRegistry := exec.Command("ks", "registry", "add", "kubeflow", kubeflowUrl)
 	ksAddRegistry.Dir = ksAppDir
-	stdout, err = ksAddRegistry.StdoutPipe()
+	ksAddRegistry.Stdout = &outb
+	ksAddRegistry.Stderr = &errb
+	err = ksAddRegistry.Run()
 	if err != nil {
-		log.Fatal(aurora.Red(err))
-	}
-	scanner = bufio.NewScanner(stdout)
-	go func() {
-		for scanner.Scan() {
-			fmt.Println(scanner.Text())
-		}
-	}()
-	if err := ksAddRegistry.Start(); err != nil {
-		log.Fatal(aurora.Red(err))
-	}
-	if err := ksAddRegistry.Wait(); err != nil {
-		log.Fatal(aurora.Red(err))
+		log.Fatal(Red(errb.String()))
 	}
 
 	// Install TF Job Operator
@@ -297,49 +264,21 @@ func installKatib() {
 	installPytorch(ksAppDir, kfEnvVar)
 
 	fmt.Println("Installing Katib")
-	pkgInstallKatib := exec.Command("ks", "pkg", "install", "kubeflow/katib")
-	pkgInstallKatib.Dir = ksAppDir
-	stdout, err = pkgInstallKatib.StdoutPipe()
-	if err != nil {
-		log.Fatal(aurora.Red(err))
-	}
-	scanner = bufio.NewScanner(stdout)
-	go func() {
-		for scanner.Scan() {
-			fmt.Println(scanner.Text())
-		}
-	}()
-	if err := pkgInstallKatib.Start(); err != nil {
-		log.Fatal(aurora.Red(err))
-	}
-	if err := pkgInstallKatib.Wait(); err != nil {
-		log.Fatal(aurora.Red(err))
-	}
+	pkgName := "kubeflow/katib"
 
-	generateKatib := exec.Command("ks", "generate", "katib", "katib")
-	generateKatib.Dir = ksAppDir
-	stdout, err = generateKatib.StdoutPipe()
-	if err != nil {
-		log.Fatal(aurora.Red(err))
-	}
-	scanner = bufio.NewScanner(stdout)
-	go func() {
-		for scanner.Scan() {
-			fmt.Println(scanner.Text())
-		}
-	}()
-	if err := generateKatib.Start(); err != nil {
-		log.Fatal(aurora.Red(err))
-	}
-	if err := generateKatib.Wait(); err != nil {
-		log.Fatal(aurora.Red(err))
-	}
+	// install pkg
+	common.KsPkgInstall(pkgName, ksAppDir)
+
+	componentGenerateName := "katib"
+
+	// generate component with ksonnet
+	common.ComponentGenerate(componentGenerateName, ksAppDir)
 
 	applykatib := exec.Command("ks", "apply", os.ExpandEnv("$KF_ENV"), "-c", "katib")
-	generateKatib.Dir = ksAppDir
+	applykatib.Dir = ksAppDir
 	stdout, err = applykatib.StdoutPipe()
 	if err != nil {
-		log.Fatal(aurora.Red(err))
+		log.Fatal(Red(err))
 	}
 	scanner = bufio.NewScanner(stdout)
 	go func() {
@@ -348,100 +287,91 @@ func installKatib() {
 		}
 	}()
 	if err := applykatib.Start(); err != nil {
-		log.Fatal(aurora.Red(err))
+		log.Fatal(Red(err))
 	}
 	if err := applykatib.Wait(); err != nil {
-		log.Fatal(aurora.Red(err))
+		log.Fatal(Red(err))
 	}
+	fmt.Println(Green("Katib has been deployed successfully"))
+
 }
 
 func installTfJob(ksAppDir string, kfEnvVar string) {
-	fmt.Println("Installing Tensorflow job operator")
-	tfTrainingInstall := exec.Command("ks", "pkg", "install", "kubeflow/tf-training")
-	tfTrainingInstall.Dir = ksAppDir
-	stdout, err := tfTrainingInstall.StdoutPipe()
-	if err != nil {
-		log.Fatal(aurora.Red(err))
-	}
-	scanner := bufio.NewScanner(stdout)
-	go func() {
-		for scanner.Scan() {
-			fmt.Println(scanner.Text())
-		}
-	}()
-	if err := tfTrainingInstall.Start(); err != nil {
-		log.Fatal(aurora.Red(err))
-	}
-	if err := tfTrainingInstall.Wait(); err != nil {
-		log.Fatal(aurora.Red(err))
-	}
 
-	kubeflowCommonInstall := exec.Command("ks", "pkg", "install", "kubeflow/common")
-	kubeflowCommonInstall.Dir = ksAppDir
-	stdout, err = kubeflowCommonInstall.StdoutPipe()
-	if err != nil {
-		log.Fatal(aurora.Red(err))
-	}
-	scanner = bufio.NewScanner(stdout)
-	go func() {
-		for scanner.Scan() {
-			fmt.Println(scanner.Text())
-		}
-	}()
-	if err := kubeflowCommonInstall.Start(); err != nil {
-		log.Fatal(aurora.Red(err))
-	}
-	if err := kubeflowCommonInstall.Wait(); err != nil {
-		log.Fatal(aurora.Red(err))
-	}
+	var outb, errb bytes.Buffer
+	componentName := "tf-training"
+	common.CheckComponentExist(componentName, ksAppDir)
 
-	generateTfOperator := exec.Command("ks", "generate", "tf-job-operator", "tf-job-operator")
-	generateTfOperator.Dir = ksAppDir
-	stdout, err = generateTfOperator.StdoutPipe()
-	if err != nil {
-		log.Fatal(aurora.Red(err))
-	}
-	scanner = bufio.NewScanner(stdout)
-	go func() {
-		for scanner.Scan() {
-			fmt.Println(scanner.Text())
-		}
-	}()
-	if err := generateTfOperator.Start(); err != nil {
-		log.Fatal(aurora.Red(err))
-	}
-	if err := generateTfOperator.Wait(); err != nil {
-		log.Fatal(aurora.Red(err))
-	}
+	fmt.Printf("App dir %s", ksAppDir)
+	fmt.Println("ks", "pkg", "install", "kubeflow/tf-training")
+
+	pkgName := "kubeflow/tf-training"
+
+	// install pkg
+	common.KsPkgInstall(pkgName, ksAppDir)
+
+	fmt.Println("Installing kubeflow/common package")
+	pkgName = "kubeflow/common"
+
+	// install pkg
+	common.KsPkgInstall(pkgName, ksAppDir)
+
+	componentGenerateName := "tf-job-operator"
+
+	// generate component with ksonnet
+	common.ComponentGenerate(componentGenerateName, ksAppDir)
+
 	os.Setenv("$KF_ENV", kfEnvVar)
+	fmt.Println("apply")
 	ksApplyTfJob := exec.Command("ks", "apply", os.ExpandEnv("$KF_ENV"), "-c", "tf-job-operator")
 	ksApplyTfJob.Dir = ksAppDir
-	stdout, err = ksApplyTfJob.StdoutPipe()
+	stdout, err := ksApplyTfJob.StdoutPipe()
 	if err != nil {
-		log.Fatal(aurora.Red(err))
+		log.Fatal(Red(err))
 	}
-	scanner = bufio.NewScanner(stdout)
+	scanner := bufio.NewScanner(stdout)
 	go func() {
 		for scanner.Scan() {
 			fmt.Println(scanner.Text())
 		}
 	}()
 	if err := ksApplyTfJob.Start(); err != nil {
-		log.Fatal(aurora.Red(err))
+		log.Fatal(Red(err))
 	}
 	if err := ksApplyTfJob.Wait(); err != nil {
-		log.Fatal(aurora.Red(err))
+		log.Fatal(Red(err))
 	}
+	fmt.Println(Green("TFJob has been deployed successfully"))
+
 
 }
 
 func installPytorch(ksAppDir string, kfEnvVar string) {
+	var outb, errb bytes.Buffer
+	componentName := "pytorch-job"
+	common.CheckComponentExist(componentName, ksAppDir)
+
+	fmt.Println("Pytorch package is not installed. Installing.")
 	fmt.Println("Installing PyTorch Job operator")
-	pkgInstallPytorch := exec.Command("ks", "pkg", "install", "kubeflow/pytorch-job")
-	pkgInstallPytorch.Dir = ksAppDir
-	stdout, err := pkgInstallPytorch.StdoutPipe()
+
+	pkgName := "kubeflow/pytorch-job"
+
+	// install pkg
+	common.KsPkgInstall(pkgName, ksAppDir)
+
+	componentGenerateName := "pytorch-operator"
+
+	// generate component with ksonnet
+	common.ComponentGenerate(componentGenerateName, ksAppDir)
+
+	os.Setenv("$KF_ENV", kfEnvVar)
+	fmt.Println(os.ExpandEnv("$KF_ENV"))
+	fmt.Println("ks", "apply", os.ExpandEnv("$KF_ENV"), "-c", "pytorch-operator")
+	applyPytorch := exec.Command("ks", "apply", os.ExpandEnv("$KF_ENV"), "-c", "pytorch-operator")
+	applyPytorch.Dir = ksAppDir
+	stdout, err := applyPytorch.StdoutPipe()
 	if err != nil {
-		log.Fatal(aurora.Red(err))
+		log.Fatal(Red(err))
 	}
 	scanner := bufio.NewScanner(stdout)
 	go func() {
@@ -449,48 +379,12 @@ func installPytorch(ksAppDir string, kfEnvVar string) {
 			fmt.Println(scanner.Text())
 		}
 	}()
-	if err := pkgInstallPytorch.Start(); err != nil {
-		log.Fatal(aurora.Red(err))
-	}
-	if err := pkgInstallPytorch.Wait(); err != nil {
-		log.Fatal(aurora.Red(err))
-	}
-
-	generatePytorch := exec.Command("ks", "generate", "pytorch-operator", "pytorch-operator")
-	generatePytorch.Dir = ksAppDir
-	stdout, err = generatePytorch.StdoutPipe()
-	if err != nil {
-		log.Fatal(aurora.Red(err))
-	}
-	scanner = bufio.NewScanner(stdout)
-	go func() {
-		for scanner.Scan() {
-			fmt.Println(scanner.Text())
-		}
-	}()
-	if err := generatePytorch.Start(); err != nil {
-		log.Fatal(aurora.Red(err))
-	}
-	if err := generatePytorch.Wait(); err != nil {
-		log.Fatal(aurora.Red(err))
-	}
-	os.Setenv("$KF_ENV", kfEnvVar)
-	applyPytorch := exec.Command("ks", "apply", os.ExpandEnv("$KF_ENV"), "-c", "pytorch-operator")
-	applyPytorch.Dir = ksAppDir
-	stdout, err = applyPytorch.StdoutPipe()
-	if err != nil {
-		log.Fatal(aurora.Red(err))
-	}
-	scanner = bufio.NewScanner(stdout)
-	go func() {
-		for scanner.Scan() {
-			fmt.Println(scanner.Text())
-		}
-	}()
 	if err := applyPytorch.Start(); err != nil {
-		log.Fatal(aurora.Red(err))
+		log.Fatal(Red(err))
 	}
 	if err := applyPytorch.Wait(); err != nil {
-		log.Fatal(aurora.Red(err))
+		log.Fatal(Red(err))
 	}
+	fmt.Println(Green("PyTorch has been deployed successfully"))
+
 }
