@@ -28,7 +28,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var kubeflow, k8s, chainerOperator, katib bool
+var kubeflow, k8s, chainerOperator, katib, modeldb bool
 
 // installCmd represents the install command
 var installCmd = &cobra.Command{
@@ -69,6 +69,11 @@ var kubeFlowComponentCmd = &cobra.Command{
 
 		}
 
+		if modeldb {
+			installModelDb()
+			os.Exit(0)
+		}
+
 		if len(args) == 0 {
 			cmd.Help()
 			os.Exit(0)
@@ -83,6 +88,8 @@ func init() {
 	kubeFlowCmd.Flags().BoolVarP(&k8s, "k8s", "", false, "Deploy Kubeflow on an existing Kubernetes cluster")
 	kubeFlowComponentCmd.Flags().BoolVarP(&chainerOperator, "chainer-operator", "", false, "Deploy Chainer Operator")
 	kubeFlowComponentCmd.Flags().BoolVarP(&katib, "katib", "", false, "Deploy Katib")
+	kubeFlowComponentCmd.Flags().BoolVarP(&modeldb, "modeldb", "", false, "Deploy ModelDB")
+
 
 }
 
@@ -383,4 +390,40 @@ func installPytorch(ksAppDir string, kfEnvVar string) {
 	}
 	fmt.Println(Green("PyTorch has been deployed successfully"))
 
+}
+
+func installModelDb() {
+	fmt.Println(Cyan("Enter the KSONNET_APP directory path"))
+	var ksAppDir string
+	fmt.Scanln(&ksAppDir)
+	componentName := "modeldb"
+	common.CheckComponentExist(componentName, ksAppDir)
+
+	componentGenerateName := "modeldb"
+
+	// generate component with ksonnet
+	common.ComponentGenerate(componentGenerateName, ksAppDir)
+
+	fmt.Println("Setting KF_ENV env var to default")
+	os.Setenv("$KF_ENV", "default")
+
+	applyModelDb := exec.Command("ks", "apply", os.ExpandEnv("$KF_ENV"), "-c", "modeldb")
+	applyModelDb.Dir = ksAppDir
+	stdout, err := applyModelDb.StdoutPipe()
+	if err != nil {
+		log.Fatal(Red(err))
+	}
+	scanner := bufio.NewScanner(stdout)
+	go func() {
+		for scanner.Scan() {
+			fmt.Println(scanner.Text())
+		}
+	}()
+	if err := applyModelDb.Start(); err != nil {
+		log.Fatal(Red(err))
+	}
+	if err := applyModelDb.Wait(); err != nil {
+		log.Fatal(Red(err))
+	}
+	fmt.Println(Green("ModelDB has been deployed successfully"))
 }
