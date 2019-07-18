@@ -9,6 +9,7 @@ import (
 	"regexp"
 
 	. "github.com/logrusorgru/aurora"
+	"github.com/manifoldco/promptui"
 )
 
 var (
@@ -38,12 +39,12 @@ func CheckKubectl(kubeConfig string) {
 	*/
 	kctlDir, err := exec.LookPath("kubectl")
 	if err != nil {
-		log.Fatal("kubectl command not found. Please check if kubectl is installed")
+		log.Fatalln("kubectl command not found. Please check if kubectl is installed")
 	}
 	fmt.Printf("Found kubectl at %s\n", kctlDir)
 	kver, err := exec.Command("kubectl", "--kubeconfig", kubeConfig, "version", "--short").Output()
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalln(err)
 	}
 	fmt.Printf(string(kver))
 }
@@ -52,7 +53,7 @@ func CheckKfctl() {
 	fmt.Println("Checking if kfctl command exists on the system and is added in $PATH")
 	kfctlDir, err := exec.LookPath("kfctl")
 	if err != nil {
-		log.Fatal("kfctl command not found. Please check if kfctl is installed correctly.")
+		log.Fatalln("kfctl command not found. Please check if kfctl is installed correctly.")
 	}
 	fmt.Printf("Found kfctl at %s\n", kfctlDir)
 
@@ -60,7 +61,7 @@ func CheckKfctl() {
 
 func CheckComponentExist(componentName string, ksAppDir string) {
 	var outb, errb bytes.Buffer
-	fmt.Printf("Checking if %s already exists.", componentName)
+	fmt.Printf("\nChecking if %s already exists.", componentName)
 	checkComponentExists := exec.Command("ks", "pkg", "list")
 	checkComponentExists.Dir = ksAppDir
 	checkComponentExists.Stdout = &outb
@@ -68,15 +69,65 @@ func CheckComponentExist(componentName string, ksAppDir string) {
 	_ = checkComponentExists.Run()
 	match, _ := regexp.MatchString(componentName+"\\s+\\*", outb.String())
 	if match {
-		Magenta(fmt.Sprintf("%s already exists. Exiting.", componentName))
-		os.Exit(0)
+		fmt.Print(
+			Sprintf(
+				Magenta("\n%s already exists. Exiting."), // <- blue format
+				Cyan(componentName),
+			),
+		)
+		return
 	}
-	Magenta(fmt.Sprintf("%s is not installed. Installing.", componentName))
+	fmt.Print(
+		Sprintf(
+			Magenta("\n%s is not installed. Installing."), // <- blue format
+			Cyan(componentName),
+		),
+	)
+}
+
+func CheckRegitryExists(registryName string, ksAppDir string, kubeflowUrl string) {
+	var outb, errb bytes.Buffer
+	fmt.Printf("Checking if %s already exists.", registryName)
+	checkComponentExists := exec.Command("ks", "registry", "list")
+	checkComponentExists.Dir = ksAppDir
+	checkComponentExists.Stdout = &outb
+	checkComponentExists.Stderr = &errb
+	_ = checkComponentExists.Run()
+	match, _ := regexp.MatchString(registryName, outb.String())
+	if match {
+		fmt.Print(
+			Sprintf(
+				Magenta("\n%s already exists. Exiting."), // <- blue format
+				Cyan(registryName),
+			),
+		)
+		return
+	}
+	fmt.Print(
+		Sprintf(
+			Magenta("\n%s is not installed. Installing."), // <- blue format
+			Cyan(registryName),
+		),
+	)
+	installRegistry(registryName, ksAppDir, kubeflowUrl)
+}
+
+func installRegistry(registryName string, ksAppDir string, kubeflowUrl string) {
+	fmt.Scanln("Adding %s registry", registryName)
+	var outb, errb bytes.Buffer
+	ksAddRegistry := exec.Command("ks", "registry", "add", registryName, kubeflowUrl)
+	ksAddRegistry.Dir = ksAppDir
+	ksAddRegistry.Stdout = &outb
+	ksAddRegistry.Stderr = &errb
+	err := ksAddRegistry.Run()
+	if err != nil {
+		log.Fatalln(Red(errb.String()))
+	}
 }
 
 func ComponentGenerate(componentGenerateName string, ksAppDir string) {
 	var outb, errb bytes.Buffer
-	fmt.Printf("Generating %s by ksonnet", componentGenerateName)
+	fmt.Printf("\nGenerating %s by ksonnet\n", componentGenerateName)
 	ksGen := exec.Command("ks", "generate", componentGenerateName, componentGenerateName)
 	ksGen.Dir = ksAppDir
 
@@ -85,7 +136,7 @@ func ComponentGenerate(componentGenerateName string, ksAppDir string) {
 	ksGen.Stderr = &errb
 	err := ksGen.Run()
 	if err != nil {
-		log.Fatal(Red(errb.String()))
+		log.Fatalln(Red(errb.String()))
 	}
 
 }
@@ -98,7 +149,19 @@ func KsPkgInstall(pkgName string, ksAppDir string) {
 	pkgInstall.Stderr = &errb
 	err := pkgInstall.Run()
 	if err != nil {
-		log.Fatal(Red(errb.String()))
+		log.Fatalln(Red(errb.String()))
 	}
 
+}
+
+func YesNo() bool {
+	prompt := promptui.Select{
+		Label: "Select[Yes/No]",
+		Items: []string{"Yes", "No"},
+	}
+	_, result, err := prompt.Run()
+	if err != nil {
+		log.Fatalf("Prompt failed %v\n", err)
+	}
+	return result == "Yes"
 }

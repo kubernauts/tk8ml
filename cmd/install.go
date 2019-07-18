@@ -17,7 +17,6 @@ package cmd
 
 import (
 	"bufio"
-	"bytes"
 	"fmt"
 	"log"
 	"os"
@@ -28,7 +27,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var kubeflow, k8s, chainerOperator, katib, modeldb bool
+var kubeflow, k8s, chainerOperator, katib, modeldb, seldon bool
 
 // installCmd represents the install command
 var installCmd = &cobra.Command{
@@ -74,6 +73,11 @@ var kubeFlowComponentCmd = &cobra.Command{
 			os.Exit(0)
 		}
 
+		if seldon {
+			installSeldon()
+			os.Exit(0)
+		}
+
 		if len(args) == 0 {
 			cmd.Help()
 			os.Exit(0)
@@ -89,7 +93,7 @@ func init() {
 	kubeFlowComponentCmd.Flags().BoolVarP(&chainerOperator, "chainer-operator", "", false, "Deploy Chainer Operator")
 	kubeFlowComponentCmd.Flags().BoolVarP(&katib, "katib", "", false, "Deploy Katib")
 	kubeFlowComponentCmd.Flags().BoolVarP(&modeldb, "modeldb", "", false, "Deploy ModelDB")
-
+	kubeFlowComponentCmd.Flags().BoolVarP(&seldon, "seldon", "", false, "Deploy seldon")
 
 }
 
@@ -222,17 +226,16 @@ func installChainerOperator() {
 }
 
 func installKatib() {
-	var outb, errb bytes.Buffer
 	fmt.Println(Cyan("Enter the KSONNET_APP directory path"))
 	var ksAppDir string
 	fmt.Scanln(&ksAppDir)
 	componentName := "katib"
 	common.CheckComponentExist(componentName, ksAppDir)
 
-	fmt.Println("Setting KF_ENV env var to default")
+	fmt.Println("\nSetting KF_ENV env var to default")
 	os.Setenv("$KF_ENV", "default")
 	kfEnvVar := "default"
-	ksEnvSet := exec.Command("ks", "env", "set", os.ExpandEnv("$KF_ENV"), "--namespace=kubeflow")
+	ksEnvSet := exec.Command("ks", "env", "set", os.Getenv("$KF_ENV"), "--namespace=kubeflow")
 
 	ksEnvSet.Dir = ksAppDir
 	stdout, err := ksEnvSet.StdoutPipe()
@@ -252,16 +255,11 @@ func installKatib() {
 		log.Fatal(Red(err))
 	}
 
-	fmt.Println("Adding kubeflow registry")
+	fmt.Println("Checking if kubeflow registry already exists")
+	registryName := "kubeflow"
 	kubeflowUrl := "github.com/kubeflow/kubeflow/tree/master/kubeflow"
-	ksAddRegistry := exec.Command("ks", "registry", "add", "kubeflow", kubeflowUrl)
-	ksAddRegistry.Dir = ksAppDir
-	ksAddRegistry.Stdout = &outb
-	ksAddRegistry.Stderr = &errb
-	err = ksAddRegistry.Run()
-	if err != nil {
-		log.Fatal(Red(errb.String()))
-	}
+
+	common.CheckRegitryExists(registryName, ksAppDir, kubeflowUrl)
 
 	// Install TF Job Operator
 	installTfJob(ksAppDir, kfEnvVar)
@@ -280,7 +278,7 @@ func installKatib() {
 	// generate component with ksonnet
 	common.ComponentGenerate(componentGenerateName, ksAppDir)
 
-	applykatib := exec.Command("ks", "apply", os.ExpandEnv("$KF_ENV"), "-c", "katib")
+	applykatib := exec.Command("ks", "apply", os.Getenv("$KF_ENV"), "-c", "katib")
 	applykatib.Dir = ksAppDir
 	stdout, err = applykatib.StdoutPipe()
 	if err != nil {
@@ -306,8 +304,7 @@ func installTfJob(ksAppDir string, kfEnvVar string) {
 	componentName := "tf-training"
 	common.CheckComponentExist(componentName, ksAppDir)
 
-	fmt.Printf("App dir %s", ksAppDir)
-	fmt.Println("ks", "pkg", "install", "kubeflow/tf-training")
+	fmt.Printf("\nApp dir %s", ksAppDir)
 
 	pkgName := "kubeflow/tf-training"
 
@@ -327,7 +324,7 @@ func installTfJob(ksAppDir string, kfEnvVar string) {
 
 	os.Setenv("$KF_ENV", kfEnvVar)
 	fmt.Println("apply")
-	ksApplyTfJob := exec.Command("ks", "apply", os.ExpandEnv("$KF_ENV"), "-c", "tf-job-operator")
+	ksApplyTfJob := exec.Command("ks", "apply", os.Getenv("$KF_ENV"), "-c", "tf-job-operator")
 	ksApplyTfJob.Dir = ksAppDir
 	stdout, err := ksApplyTfJob.StdoutPipe()
 	if err != nil {
@@ -346,7 +343,6 @@ func installTfJob(ksAppDir string, kfEnvVar string) {
 		log.Fatal(Red(err))
 	}
 	fmt.Println(Green("TFJob has been deployed successfully"))
-
 
 }
 
@@ -369,8 +365,7 @@ func installPytorch(ksAppDir string, kfEnvVar string) {
 
 	os.Setenv("$KF_ENV", kfEnvVar)
 	fmt.Println(os.ExpandEnv("$KF_ENV"))
-	fmt.Println("ks", "apply", os.ExpandEnv("$KF_ENV"), "-c", "pytorch-operator")
-	applyPytorch := exec.Command("ks", "apply", os.ExpandEnv("$KF_ENV"), "-c", "pytorch-operator")
+	applyPytorch := exec.Command("ks", "apply", os.Getenv("$KF_ENV"), "-c", "pytorch-operator")
 	applyPytorch.Dir = ksAppDir
 	stdout, err := applyPytorch.StdoutPipe()
 	if err != nil {
@@ -407,7 +402,7 @@ func installModelDb() {
 	fmt.Println("Setting KF_ENV env var to default")
 	os.Setenv("$KF_ENV", "default")
 
-	applyModelDb := exec.Command("ks", "apply", os.ExpandEnv("$KF_ENV"), "-c", "modeldb")
+	applyModelDb := exec.Command("ks", "apply", os.Getenv("$KF_ENV"), "-c", "modeldb")
 	applyModelDb.Dir = ksAppDir
 	stdout, err := applyModelDb.StdoutPipe()
 	if err != nil {
@@ -426,4 +421,70 @@ func installModelDb() {
 		log.Fatal(Red(err))
 	}
 	fmt.Println(Green("ModelDB has been deployed successfully"))
+}
+
+func installSeldon() {
+	fmt.Println(Cyan("Enter the KSONNET_APP directory path"))
+	var ksAppDir string
+	fmt.Scanln(&ksAppDir)
+
+	componentName := "seldon"
+	common.CheckComponentExist(componentName, ksAppDir)
+
+	pkgName := "kubeflow/seldon"
+
+	// install pkg
+	common.KsPkgInstall(pkgName, ksAppDir)
+
+	componentGenerateName := "seldon"
+
+	// generate component with ksonnet
+	common.ComponentGenerate(componentGenerateName, ksAppDir)
+
+	fmt.Println("\nDo you wish to use Seldon's previous v1alpha1 version for its CRD?")
+
+	if common.YesNo() {
+		fmt.Println(Cyan("Enter the Seldon version in the 0.1.x range"))
+		var seldonVersion string
+		fmt.Scanln(&seldonVersion)
+		setKsParam := exec.Command("ks", "param", "set", "seldon", "seldonVersion", seldonVersion)
+		setKsParam.Dir = ksAppDir
+		stdout, err := setKsParam.StdoutPipe()
+		if err != nil {
+			log.Fatal(Red(err))
+		}
+		scanner := bufio.NewScanner(stdout)
+		go func() {
+			for scanner.Scan() {
+				fmt.Println(scanner.Text())
+			}
+		}()
+		if err := setKsParam.Start(); err != nil {
+			log.Fatal(Red(err))
+		}
+		if err := setKsParam.Wait(); err != nil {
+			log.Fatal(Red(err))
+		}
+	}
+
+	fmt.Println("Setting KF_ENV env var to default")
+	kfEnvVar := "default"
+	os.Setenv("$KF_ENV", kfEnvVar)
+
+	fmt.Println(os.ExpandEnv("$KF_ENV"))
+	fmt.Println(os.Getenv("$KF_ENV"))
+
+	applySeldon := exec.Command("ks", "apply", os.Getenv("$KF_ENV"), "-c", "seldon")
+	fmt.Println("ks", "apply", os.Getenv("$KF_ENV"), "-c", "seldon")
+	applySeldon.Stdin = os.Stdin
+	applySeldon.Stdout = os.Stdout
+	applySeldon.Stderr = os.Stderr
+	applySeldon.Dir = ksAppDir
+
+	err := applySeldon.Run()
+	if err != nil {
+		log.Fatal(Red(err))
+	}
+
+	fmt.Println(Green("Seldon has been deployed successfully"))
 }
