@@ -23,11 +23,12 @@ import (
 	"os/exec"
 
 	"github.com/kubernauts/tk8ml/pkg/common"
+	"github.com/kubernauts/tk8ml/pkg/serving"
 	. "github.com/logrusorgru/aurora"
 	"github.com/spf13/cobra"
 )
 
-var kubeflow, k8s, chainerOperator, katib, modeldb, seldon bool
+var kubeflow, k8s, chainerOperator, katib, modeldb, seldon, tfServing bool
 
 // installCmd represents the install command
 var installCmd = &cobra.Command{
@@ -85,16 +86,34 @@ var kubeFlowComponentCmd = &cobra.Command{
 	},
 }
 
+var kubeFlowServingCmd = &cobra.Command{
+	Use:   "kubeflow-serving",
+	Short: "Setup Kubeflow Serving components",
+	Long:  "This command will setup different Kubeflow serving components",
+	Run: func(cmd *cobra.Command, args []string) {
+		if tfServing {
+			kubeConfig := common.GetKubeConfig()
+			common.CheckKubectl(kubeConfig)
+			installTfServing()
+		}
+		if len(args) == 0 {
+			cmd.Help()
+			os.Exit(0)
+		}
+	},
+}
+
 func init() {
 	rootCmd.AddCommand(installCmd)
 	installCmd.AddCommand(kubeFlowCmd)
 	installCmd.AddCommand(kubeFlowComponentCmd)
+	installCmd.AddCommand(kubeFlowServingCmd)
 	kubeFlowCmd.Flags().BoolVarP(&k8s, "k8s", "", false, "Deploy Kubeflow on an existing Kubernetes cluster")
 	kubeFlowComponentCmd.Flags().BoolVarP(&chainerOperator, "chainer-operator", "", false, "Deploy Chainer Operator")
 	kubeFlowComponentCmd.Flags().BoolVarP(&katib, "katib", "", false, "Deploy Katib")
 	kubeFlowComponentCmd.Flags().BoolVarP(&modeldb, "modeldb", "", false, "Deploy ModelDB")
 	kubeFlowComponentCmd.Flags().BoolVarP(&seldon, "seldon", "", false, "Deploy seldon")
-
+	kubeFlowServingCmd.Flags().BoolVarP(&tfServing, "tf-serving", "", false, "Setup TF serving component")
 }
 
 func kubeFlowInstall(kubeConfig string) {
@@ -487,4 +506,10 @@ func installSeldon() {
 	}
 
 	fmt.Println(Green("Seldon has been deployed successfully"))
+}
+
+func installTfServing() {
+	fmt.Println(Cyan("Starting setup of TensorFlow Serving component"))
+	serving.ConfigureTfServing()
+
 }
