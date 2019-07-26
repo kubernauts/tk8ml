@@ -2,9 +2,6 @@ package serving
 
 import (
 	"fmt"
-	"github.com/kyokomi/emoji"
-	. "github.com/logrusorgru/aurora"
-	"github.com/spf13/viper"
 	"log"
 	"math/rand"
 	"os"
@@ -12,6 +9,10 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/kyokomi/emoji"
+	. "github.com/logrusorgru/aurora"
+	"github.com/spf13/viper"
 )
 
 type TfServingConfig struct {
