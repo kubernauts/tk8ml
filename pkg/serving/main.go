@@ -75,7 +75,6 @@ func ConfigureTfServing() {
 	fmt.Println(Cyan("Enter the KSONNET_APP directory path"))
 	var ksAppDir string
 	fmt.Scanln(&ksAppDir)
-	fmt.Println("Inside ConfigureTfServing")
 	tfServingStruct := GetTfServingConfig()
 	tfServingStructPtr := &tfServingStruct
 	if (*tfServingStructPtr).InstallIstio {
@@ -155,8 +154,7 @@ func ConfigureTfServing() {
 		"modelBasePath": (*tfServingStructPtr).ModelBasePath,
 	}
 
-	fmt.Println("Generating deployment")
-	fmt.Println(os.Getenv("$MODEL_COMPONENT"))
+	fmt.Println("Generating deployment.")
 	ksGenerateDeploy := exec.Command("ks", "generate", (*tfServingStructPtr).DeploymentName, os.Getenv("$MODEL_COMPONENT"))
 	ksGenerateDeploy.Dir = ksAppDir
 	ksGenerateDeploy.Stdin = os.Stdin
@@ -170,7 +168,7 @@ func ConfigureTfServing() {
 	for key, value := range deploymentComps {
 		switch key {
 		case "modelName":
-			fmt.Println("Setting modelName for deployment component")
+			fmt.Println("Setting modelName for deployment component.")
 			ksSetModelName := exec.Command("ks", "param", "set", os.Getenv("$MODEL_COMPONENT"), key, value)
 			ksSetModelName.Dir = ksAppDir
 			ksSetModelName.Stdin = os.Stdin
@@ -182,7 +180,7 @@ func ConfigureTfServing() {
 			}
 
 		case "versionName":
-			fmt.Println("Setting versionName for deployment component")
+			fmt.Println("Setting versionName for deployment component.")
 			ksSetVersionName := exec.Command("ks", "param", "set", os.Getenv("$MODEL_COMPONENT"), key, value)
 			ksSetVersionName.Dir = ksAppDir
 			ksSetVersionName.Stdin = os.Stdin
@@ -194,9 +192,7 @@ func ConfigureTfServing() {
 			}
 
 		case "modelBasePath":
-			fmt.Println("Setting modelBasePath for deployment component")
-			fmt.Println("key", key)
-			fmt.Println("value", value)
+			fmt.Println("Setting modelBasePath for deployment component.")
 			ksSetModelBasepath := exec.Command("ks", "param", "set", os.Getenv("$MODEL_COMPONENT"), key, value)
 			ksSetModelBasepath.Dir = ksAppDir
 			ksSetModelBasepath.Stdin = os.Stdin
@@ -210,7 +206,7 @@ func ConfigureTfServing() {
 	}
 
 	if (*tfServingStructPtr).NumGpus >= 1 {
-		fmt.Println("Setting GPU parameter")
+		fmt.Println("Setting GPU parameter.")
 		ksSetGpuParam := exec.Command("ks", "param", "set", os.Getenv("$MODEL_COMPONENT"), "numGpus", strconv.Itoa((*tfServingStructPtr).NumGpus))
 		ksSetGpuParam.Dir = ksAppDir
 		ksSetGpuParam.Stdin = os.Stdin
@@ -223,7 +219,7 @@ func ConfigureTfServing() {
 	}
 
 	if (*tfServingStructPtr).ModelLocation == "gcp" {
-		fmt.Println("Setting GCP credentials secret name")
+		fmt.Println("Setting GCP credentials secret name.")
 		ksSetSecretName := exec.Command("ks", "param", "set", "gcpCredentialSecretName", (*tfServingStructPtr).GcpSecretName)
 		ksSetSecretName.Dir = ksAppDir
 		ksSetSecretName.Stdin = os.Stdin
@@ -238,17 +234,33 @@ func ConfigureTfServing() {
 	var secretName string
 	if (*tfServingStructPtr).ModelLocation == "s3" {
 		if (*tfServingStructPtr).AwsSecretname == "" {
-			fmt.Println("AWS secret name is not set. Creating the kubernetes secret")
+			fmt.Println("AWS secret name is not set. Creating the kubernetes secret.")
 			rand.Seed(time.Now().UnixNano())
 			randomStr := RandStringBytes(5)
 			secretName = "kf-tf-serving-secret-" + randomStr
+			base64Access := "printf " + "'" + os.Getenv("AWS_ACCESS_KEY_ID") + "'" + " | " + "openssl " + "base64"
+			base64Secret := "printf " + "'" + os.Getenv("AWS_SECRET_ACCESS_KEY") + "'" + " | " + "openssl " + "base64"
+			fmt.Println("printf", "'"+os.Getenv("AWS_ACCESS_KEY_ID")+"'", "|", "openssl", "base64")
+
+			c1, err := exec.Command("sh", "-c", base64Access).Output()
+			fmt.Println("c1", string(c1))
+			base64AwsAccessKey := string(c1)
+
+			c2, err := exec.Command("sh", "-c", base64Secret).Output()
+			fmt.Println("c1", string(c2))
+			base64AwsSecretKey := string(c2)
+
+			fmt.Println("kubectl", "-n", "kubeflow", "create", "secret", "generic",
+				secretName, "--from-literal=AWS_ACCESS_KEY_ID="+base64AwsAccessKey,
+				"--from-literal=AWS_SECRET_ACCESS_KEY="+base64AwsSecretKey)
+
 			createSecretGeneric := exec.Command("kubectl", "-n", "kubeflow", "create", "secret", "generic",
-				secretName, "--from-literal=AWS_ACCESS_KEY_ID="+os.Getenv("AWS_ACCESS_KEY_ID"),
-				"--from-literal=AWS_SECRET_ACCESS_KEY="+os.Getenv("AWS_SECRET_ACCESS_KEY"))
+				secretName, "--from-literal=AWS_ACCESS_KEY_ID="+base64AwsAccessKey,
+				"--from-literal=AWS_SECRET_ACCESS_KEY="+base64AwsSecretKey)
 			createSecretGeneric.Stdin = os.Stdin
 			createSecretGeneric.Stdout = os.Stdout
 			createSecretGeneric.Stderr = os.Stderr
-			err := createSecretGeneric.Run()
+			err = createSecretGeneric.Run()
 			if err != nil {
 				log.Fatal(Red(err))
 			}
@@ -264,7 +276,7 @@ func ConfigureTfServing() {
 		for key, value := range s3Params {
 			switch key {
 			case "s3Enable":
-				fmt.Println("Setting S3 related options for deployment")
+				fmt.Println("Setting S3 related options for deployment.")
 				ksEnableS3 := exec.Command("ks", "param", "set", os.Getenv("$MODEL_COMPONENT"), key, value)
 				ksEnableS3.Dir = ksAppDir
 				ksEnableS3.Stdin = os.Stdin
@@ -291,7 +303,7 @@ func ConfigureTfServing() {
 		}
 
 		if len(strings.TrimSpace((*tfServingStructPtr).S3AwsRegion)) != 0 {
-			fmt.Println("Setting AWS region")
+			fmt.Println("Setting AWS region.")
 			fmt.Println((*tfServingStructPtr).S3AwsRegion)
 			ksSetS3Region := exec.Command("ks", "param", "set", "s3AwsRegion", (*tfServingStructPtr).S3AwsRegion)
 			ksSetS3Region.Dir = ksAppDir
@@ -306,7 +318,7 @@ func ConfigureTfServing() {
 		}
 
 		if (*tfServingStructPtr).S3UseHttps {
-			fmt.Println("Setting s3UseHttps option")
+			fmt.Println("Setting s3UseHttps option.")
 			ksSetS3Https := exec.Command("ks", "param", "set", os.Getenv("$MODEL_COMPONENT"), "s3UseHttps", strconv.FormatBool((*tfServingStructPtr).S3UseHttps))
 			ksSetS3Https.Dir = ksAppDir
 			ksSetS3Https.Stdin = os.Stdin
@@ -334,7 +346,7 @@ func ConfigureTfServing() {
 		}
 
 		if (*tfServingStructPtr).S3EndpointUrl != "" {
-			fmt.Println("Setting S3 endpoint URL")
+			fmt.Println("Setting S3 endpoint URL.")
 			ksSetS3EpUrl := exec.Command("ks", "param", "set", os.Getenv("$MODEL_COMPONENT"), "s3Endpoint", (*tfServingStructPtr).S3EndpointUrl)
 			ksSetS3EpUrl.Dir = ksAppDir
 			ksSetS3EpUrl.Stdin = os.Stdin
@@ -349,7 +361,7 @@ func ConfigureTfServing() {
 
 	}
 
-	emoji.Println(":four: Applying the parameters for deployment")
+	emoji.Println(":four: Applying the parameters for deployment.")
 	ksApplySvc := exec.Command("ks", "apply", os.Getenv("KF_ENV"), "-c", (*tfServingStructPtr).ServiceName)
 	ksApplySvc.Dir = ksAppDir
 	ksApplySvc.Stdin = os.Stdin
@@ -371,7 +383,7 @@ func ConfigureTfServing() {
 	if err != nil {
 		log.Fatal(Red(err))
 	}
-	emoji.Println(Green(":fire: TensorFlow model has been deployed successfully"))
+	emoji.Println(Green(":fire: TensorFlow model has been deployed successfully."))
 }
 
 func RandStringBytes(n int) string {
@@ -411,5 +423,5 @@ func installIstio() {
 		log.Fatal(Red(err))
 	}
 
-	emoji.Println(Green(":white_check_mark: Istio has been deployed successfully"))
+	emoji.Println(Green(":white_check_mark: Istio has been deployed successfully."))
 }
