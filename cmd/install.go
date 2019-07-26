@@ -95,6 +95,7 @@ var kubeFlowServingCmd = &cobra.Command{
 			kubeConfig := common.GetKubeConfig()
 			common.CheckKubectl(kubeConfig)
 			installTfServing()
+			os.Exit(0)
 		}
 		if len(args) == 0 {
 			cmd.Help()
