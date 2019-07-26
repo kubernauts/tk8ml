@@ -78,8 +78,6 @@ func ConfigureTfServing() {
 	fmt.Println("Inside ConfigureTfServing")
 	tfServingStruct := GetTfServingConfig()
 	tfServingStructPtr := &tfServingStruct
-	//fmt.Println("ps", tfServingStructPtr)
-	//fmt.Println("value of InstallIstio:", (*tfServingStructPtr).InstallIstio)
 	if (*tfServingStructPtr).InstallIstio {
 		installIstio()
 	}
@@ -90,14 +88,6 @@ func ConfigureTfServing() {
 		"trafficRule": "v1:100",
 		"serviceType": (*tfServingStructPtr).ServiceType,
 	}
-
-	// sortMap := make([]string, 0, len(serviceComps))
-	// for comp := range serviceComps {
-	// 	sortMap = append(sortMap, comp)
-	// }
-	// sort.Strings(sortMap)
-	// fmt.Println(sortMap)
-	//os.Exit(0)
 
 	fmt.Println("Setting service name")
 	ksGenerateService := exec.Command("ks", "generate", "tf-serving-service", (*tfServingStructPtr).ServiceName)
@@ -163,7 +153,6 @@ func ConfigureTfServing() {
 		"modelName":     (*tfServingStructPtr).ModelName,
 		"versionName":   (*tfServingStructPtr).VersionName,
 		"modelBasePath": (*tfServingStructPtr).ModelBasePath,
-		//"gcpCredentialSecretName": (*tfServingStructPtr).GcpSecretName,
 	}
 
 	fmt.Println("Generating deployment")
@@ -253,7 +242,7 @@ func ConfigureTfServing() {
 			rand.Seed(time.Now().UnixNano())
 			randomStr := RandStringBytes(5)
 			secretName = "kf-tf-serving-secret-" + randomStr
-			createSecretGeneric := exec.Command("kubectl", "create", "secret", "generic",
+			createSecretGeneric := exec.Command("kubectl", "-n", "kubeflow", "create", "secret", "generic",
 				secretName, "--from-literal=AWS_ACCESS_KEY_ID="+os.Getenv("AWS_ACCESS_KEY_ID"),
 				"--from-literal=AWS_SECRET_ACCESS_KEY="+os.Getenv("AWS_SECRET_ACCESS_KEY"))
 			createSecretGeneric.Stdin = os.Stdin
@@ -423,6 +412,4 @@ func installIstio() {
 	}
 
 	emoji.Println(Green(":white_check_mark: Istio has been deployed successfully"))
-
-	//os.Exit(0)
 }
