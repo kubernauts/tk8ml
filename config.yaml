@@ -1,0 +1,34 @@
+kf-components:
+  serving:
+    tf-serving:
+      install-istio: false
+      tf-serving-service-name: "mnist-test"
+      tf-serving-deployment-name: "tf-serving-deployment-aws"
+      model-name: "mnist-model-name"
+      service-type: "LoadBalancer"
+      version-name: "v1"
+      model-base-path: "s3://kubeflow-models/inception"
+      gcp-secret-name: 
+      aws-secret-name: 
+      inject-istio: true
+      s3-enable: true
+      s3-secret-name: 
+      s3-aws-region: 
+      s3-use-https: true
+      s3-verify-ssl-certs: true
+      s3-endpoint-url: "s3.eu-central-1.amazonaws.com"
+      num-gpus: 0
+      model-location: s3 # supported are gcp/s3
+
+    tf-batch-predict:
+      kubeflow-version: "v0.6.1"
+      registry-name: "kubeflow-git"
+      job-name: "test-job-name"
+      gcp-secret-name: ""
+      input-file-patterns: "test-file-patterns"
+      input-file-format: "test-file-format"
+      model-path: "test-model-path"
+      batch-size: 3
+      output-result-prefix: "test-op-prefix"
+      output-error-prefix: "test-error-prefix" 
+      num-gpu:
