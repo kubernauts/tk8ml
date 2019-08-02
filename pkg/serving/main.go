@@ -36,6 +36,20 @@ type TfServingConfig struct {
 	ModelLocation    string
 }
 
+type TfBatchPredict struct {
+	KubeflowVersion    string
+	RegistryName       string
+	JobName            string
+	GcpSecretName      string
+	InputFilePatterns  string
+	ModelPath          string
+	BatchSize          int
+	OutputResultPrefix string
+	OutputErrorPrefix  string
+	NumGpus            int
+	InputFileFormat    string
+}
+
 func GetTfServingConfig() TfServingConfig {
 	ReadViperConfigFile("config")
 	return TfServingConfig{
@@ -60,6 +74,23 @@ func GetTfServingConfig() TfServingConfig {
 	}
 }
 
+func GetTfBatchPredictConfig() TfBatchPredict {
+	ReadViperConfigFile("config")
+	return TfBatchPredict{
+		KubeflowVersion:    viper.GetString("kf-components.serving.tf-serving.kubeflow-version"),
+		RegistryName:       viper.GetString("kf-components.serving.tf-serving.registry-name"),
+		JobName:            viper.GetString("kf-components.serving.tf-batch-predict.job-name"),
+		GcpSecretName:      viper.GetString("kf-components.serving.tf-batch-predict.gcp-secret-name"),
+		InputFilePatterns:  viper.GetString("kf-components.serving.tf-batch-predict.input-file-patterns"),
+		InputFileFormat:    viper.GetString("kf-components.serving.tf-batch-predict.input-file-format"),
+		ModelPath:          viper.GetString("kf-components.serving.tf-batch-predict.model-path"),
+		BatchSize:          viper.GetInt("kf-components.serving.tf-batch-predict.batch-size"),
+		OutputResultPrefix: viper.GetString("kf-components.serving.tf-batch-predict.output-result-prefix"),
+		OutputErrorPrefix:  viper.GetString("kf-components.serving.tf-batch-predict.output-error-prefix"),
+		NumGpus:            viper.GetInt("kf-components.serving.tf-batch-predict.num-gpu"),
+	}
+}
+
 // ReadViperConfigFile is define the config paths and read the configuration file.
 func ReadViperConfigFile(configName string) {
 	viper.SetConfigName(configName)
@@ -69,6 +100,162 @@ func ReadViperConfigFile(configName string) {
 	if verr != nil {             // Handle errors reading the config file.
 		log.Fatalln(verr)
 	}
+}
+
+func ConfigureTfBatchPredict() {
+	fmt.Println(Cyan("Enter the KSONNET_APP directory path"))
+	var ksAppDir string
+	fmt.Scanln(&ksAppDir)
+	tfBatchPredictStruct := GetTfBatchPredictConfig()
+	tfBatchPredictStructPtr := &tfBatchPredictStruct
+	emoji.Println(":one: Setting the configuration values as specified in config.yaml")
+	batchPredictComps := map[string]interface{}{
+		"jobName":           (*tfBatchPredictStructPtr).JobName,
+		"inputFilePatterns": (*tfBatchPredictStructPtr).InputFilePatterns,
+		"inputFileFormat":   (*tfBatchPredictStructPtr).InputFileFormat,
+		"modelPath":         (*tfBatchPredictStructPtr).ModelPath,
+		"outputResultPref":  (*tfBatchPredictStructPtr).OutputResultPrefix,
+		"outputErrPref":     (tfBatchPredictStructPtr).OutputErrorPrefix,
+		"batchSize":         strconv.Itoa((*tfBatchPredictStructPtr).BatchSize),
+	}
+
+	for key, value := range batchPredictComps {
+		switch key {
+		case "jobName":
+			err := os.Setenv("MY_BATCH_PREDICT_JOB", value.(string))
+			if err != nil {
+				log.Fatal(Red(err))
+			}
+
+		case "inputFilePatterns":
+			err := os.Setenv("INPUT_FILE_PATTERNS", value.(string))
+			if err != nil {
+				log.Fatal(Red(err))
+			}
+
+		case "inputFileFormat":
+			err := os.Setenv("INPUT_FILE_FORMAT", value.(string))
+			if err != nil {
+				log.Fatal(Red(err))
+			}
+
+		case "modelPath":
+			err := os.Setenv("MODEL_PATH", value.(string))
+			if err != nil {
+				log.Fatal(Red(err))
+			}
+
+		case "outputResultPref":
+			err := os.Setenv("OUTPUT_RESULT_PREFIX", value.(string))
+			if err != nil {
+				log.Fatal(Red(err))
+			}
+
+		case "outputErrPref":
+			err := os.Setenv("OUTPUT_ERROR_PREFIX", value.(string))
+			if err != nil {
+				log.Fatal(Red(err))
+			}
+
+		case "batchSize":
+			err := os.Setenv("BATCH_SIZE", value.(string))
+			if err != nil {
+				log.Fatal(Red(err))
+			}
+		}
+	}
+	rand.Seed(time.Now().UnixNano())
+	randName := RandStringBytes(5)
+	ksRegRandName := "kf-batch" + "-" + randName
+	kfRegUrl := "github.com/kubeflow/kubeflow/tree/" + (*tfBatchPredictStructPtr).KubeflowVersion + "/kubeflow"
+	emoji.Println(":two: Add kubeflow registry with name:", (*tfBatchPredictStructPtr).RegistryName)
+	ksAddReg := exec.Command("ks", "registry", "add", ksRegRandName, kfRegUrl)
+	ksAddReg.Dir = ksAppDir
+	ksAddReg.Stdin = os.Stdin
+	ksAddReg.Stdout = os.Stdout
+	ksAddReg.Stderr = os.Stderr
+
+	err := ksAddReg.Run()
+	if err != nil {
+		log.Fatal(Red(err))
+	}
+	ksInstallPkg := exec.Command("ks", "pkg", "install", ksRegRandName+"/examples")
+	ksInstallPkg.Dir = ksAppDir
+	ksInstallPkg.Stdin = os.Stdin
+	ksInstallPkg.Stdout = os.Stdout
+	ksInstallPkg.Stderr = os.Stderr
+
+	err = ksInstallPkg.Run()
+	if err != nil {
+		log.Fatal(Red(err))
+	}
+
+	emoji.Println(":three: Generating the Tensorflow batch predict job.")
+	ksGenerateCmd := exec.Command("ks", "generate", (*tfBatchPredictStructPtr).JobName, os.Getenv("MY_BATCH_PREDICT_JOB"),
+		"--inputFilePatterns="+os.Getenv("INPUT_FILE_PATTERNS"), "--inputFileFormat="+os.Getenv("INPUT_FILE_FORMAT"),
+		"--modelPath="+os.Getenv("MODEL_PATH"), "--outputResultPrefix="+os.Getenv("OUTPUT_RESULT_PREFIX"),
+		"--outputErrorPrefix="+os.Getenv("OUTPUT_ERROR_PREFIX"), "--batchSize="+os.Getenv("BATCH_SIZE"))
+
+	ksGenerateCmd.Dir = ksAppDir
+	ksGenerateCmd.Stdin = os.Stdin
+	ksGenerateCmd.Stdout = os.Stdout
+	ksGenerateCmd.Stderr = os.Stderr
+
+	err = ksGenerateCmd.Run()
+	if err != nil {
+		log.Fatal(Red(err))
+	}
+
+	if (*tfBatchPredictStructPtr).NumGpus != 0 {
+		fmt.Println("Setting gpu params")
+		ksSetGpu := exec.Command("ks", "param", "set", "--env="+os.Getenv("KF_APP"), (*tfBatchPredictStructPtr).JobName, "numGpus", strconv.Itoa((*tfBatchPredictStructPtr).NumGpus))
+		ksSetGpu.Dir = ksAppDir
+		ksSetGpu.Stdin = os.Stdin
+		ksSetGpu.Stdout = os.Stdout
+		ksSetGpu.Stderr = os.Stderr
+
+		err = ksSetGpu.Run()
+		if err != nil {
+			log.Fatal(Red(err))
+		}
+	}
+
+	if (*tfBatchPredictStructPtr).GcpSecretName != "" {
+		fmt.Println("Setting GCP secret name")
+		ksSetGcpSecret := exec.Command("ks", "param", "set", "--env="+os.Getenv("KF_APP"), (*tfBatchPredictStructPtr).JobName, "gcpCredentialSecretName", (*tfBatchPredictStructPtr).GcpSecretName)
+		ksSetGcpSecret.Dir = ksAppDir
+		ksSetGcpSecret.Stdin = os.Stdin
+		ksSetGcpSecret.Stdout = os.Stdout
+		ksSetGcpSecret.Stderr = os.Stderr
+
+		err = ksSetGcpSecret.Run()
+		if err != nil {
+			log.Fatal(Red(err))
+		}
+	}
+
+	emoji.Println(":four: Appying the generated config.")
+	ksApplyBatch := exec.Command("ks", "apply", os.Getenv("KF_ENV"), "-c", (*tfBatchPredictStructPtr).JobName)
+
+	ksApplyBatch.Dir = ksAppDir
+	ksApplyBatch.Stdin = os.Stdin
+	ksApplyBatch.Stdout = os.Stdout
+	ksApplyBatch.Stderr = os.Stderr
+
+	err = ksApplyBatch.Run()
+	if err != nil {
+		log.Fatal(Red(err))
+	}
+
+	fmt.Println("Printing env vars")
+	fmt.Printf("jobName: %s, gcpSecret: %s, inputFilePatterns: %s, inputFileFormat: %s, "+
+		"modelPath: %s, outputResultPref: %s, outputErrPref: %s, batchSize: %s, numGpus: %s",
+		os.Getenv("MY_BATCH_PREDICT_JOB"), os.Getenv("GCP_CREDENTIAL_SECRET_NAME"),
+		os.Getenv("INPUT_FILE_PATTERNS"), os.Getenv("INPUT_FILE_FORMAT"), os.Getenv("MODEL_PATH"),
+		os.Getenv("OUTPUT_RESULT_PREFIX"), os.Getenv("OUTPUT_ERROR_PREFIX"), os.Getenv("BATCH_SIZE"),
+		os.Getenv("NUM_GPUS"))
+
+	emoji.Println(Green(":fire: TensorFlow Batch Predict model has been deployed successfully."))
 }
 
 func ConfigureTfServing() {

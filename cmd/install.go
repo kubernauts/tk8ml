@@ -28,7 +28,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var kubeflow, k8s, chainerOperator, katib, modeldb, seldon, tfServing bool
+var kubeflow, k8s, chainerOperator, katib, modeldb, seldon, tfServing, tfBatchPredict bool
 
 // installCmd represents the install command
 var installCmd = &cobra.Command{
@@ -97,6 +97,12 @@ var kubeFlowServingCmd = &cobra.Command{
 			installTfServing()
 			os.Exit(0)
 		}
+
+		if tfBatchPredict {
+			installTfBatchPredict()
+			os.Exit(0)
+		}
+
 		if len(args) == 0 {
 			cmd.Help()
 			os.Exit(0)
@@ -115,6 +121,7 @@ func init() {
 	kubeFlowComponentCmd.Flags().BoolVarP(&modeldb, "modeldb", "", false, "Deploy ModelDB")
 	kubeFlowComponentCmd.Flags().BoolVarP(&seldon, "seldon", "", false, "Deploy seldon")
 	kubeFlowServingCmd.Flags().BoolVarP(&tfServing, "tf-serving", "", false, "Setup TF serving component")
+	kubeFlowServingCmd.Flags().BoolVarP(&tfBatchPredict, "tf-batch-predict", "", false, "Setup Tensorflow Batch Predict Job.")
 }
 
 func kubeFlowInstall(kubeConfig string) {
@@ -513,4 +520,9 @@ func installTfServing() {
 	fmt.Println(Cyan("Starting setup of TensorFlow Serving component"))
 	serving.ConfigureTfServing()
 
+}
+
+func installTfBatchPredict() {
+	fmt.Println(Cyan("Starting setup of Tensorflow Batch Predict Job"))
+	serving.ConfigureTfBatchPredict()
 }
