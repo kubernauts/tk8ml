@@ -246,15 +246,6 @@ func ConfigureTfBatchPredict() {
 	if err != nil {
 		log.Fatal(Red(err))
 	}
-
-	fmt.Println("Printing env vars")
-	fmt.Printf("jobName: %s, gcpSecret: %s, inputFilePatterns: %s, inputFileFormat: %s, "+
-		"modelPath: %s, outputResultPref: %s, outputErrPref: %s, batchSize: %s, numGpus: %s",
-		os.Getenv("MY_BATCH_PREDICT_JOB"), os.Getenv("GCP_CREDENTIAL_SECRET_NAME"),
-		os.Getenv("INPUT_FILE_PATTERNS"), os.Getenv("INPUT_FILE_FORMAT"), os.Getenv("MODEL_PATH"),
-		os.Getenv("OUTPUT_RESULT_PREFIX"), os.Getenv("OUTPUT_ERROR_PREFIX"), os.Getenv("BATCH_SIZE"),
-		os.Getenv("NUM_GPUS"))
-
 	emoji.Println(Green(":fire: TensorFlow Batch Predict model has been deployed successfully."))
 }
 
