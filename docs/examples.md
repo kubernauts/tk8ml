@@ -45,6 +45,8 @@
      
 * Setup kubeflow serving components:
 
+    * Set `KF_ENV` environment variable (set to default if there is no preference).
+    
     * Setup TensorFlow Batch Predict:
     
         * Make sure you have `config.yaml` in the directory. Example configuration for Tensorflow Batch Predict:
@@ -90,6 +92,9 @@
         export AWS_ACCESS_KEY_ID=XXXXXXXXXXX
         export AWS_SECRET_ACCESS_KEY=XXXXXXXXXXXXXXXXXXX
         ```
+        
+        * Set `KF_ENV` environment variable (set to default if there is no preference).
+        
         * Make sure you have `config.yaml` in the directory. Example configuration for Tensorflow Serving:
         ```yaml
         kf-components:
