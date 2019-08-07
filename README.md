@@ -9,6 +9,9 @@ As of now, TK8ml uses Kubeflow components. In near future, if more options are a
 * [kfctl binary](https://github.com/kubeflow/kubeflow/releases/).
 * Configured aws CLI (if using AWS as a cloud provider).
 * A Kubernetes cluster.
+* [Ksonnet](https://ksonnet.io/). 
+
+*Note*: For now, ksonnet is being used (so does Kubeflow, for now). Once Kubeflow completely moves away from `ksonnet` to `kustomize`, this project will follow the same suit.
 
 ### Installation
 
